@@ -99,9 +99,9 @@
     '.twc-reset{position:absolute;top:14px;right:14px;font:inherit;font-size:11px;letter-spacing:.14em;text-transform:uppercase;background:transparent;border:0;color:var(--ink2);cursor:pointer;padding:6px}' +
     '.twc-loading{position:absolute;inset:0;display:grid;place-items:center;font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted)}' +
     '.twc-panel{display:flex;flex-direction:column}' +
-    '.twc-group{padding:18px 0;border-top:1px solid var(--line)}' +
+    '.twc-group{padding:12px 0;border-top:1px solid var(--line)}' +
     '.twc-group:last-of-type{border-bottom:1px solid var(--line)}' +
-    '.twc-head{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:12px}' +
+    '.twc-head{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:8px}' +
     '.twc-label{font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted)}' +
     '.twc-value{font-family:"IBM Plex Sans",sans-serif;font-size:14px;color:var(--ink)}' +
     '.twc-pills{display:flex;flex-wrap:wrap;gap:6px 18px}' +
@@ -114,16 +114,16 @@
     '.twc-sw[aria-pressed="true"]::after{border-color:var(--ink)}' +
     '.twc-custom{position:relative;width:26px;height:26px;border-radius:50%;overflow:hidden;background:conic-gradient(#efefef,#d3c3a8,#55555a,#efefef);box-shadow:inset 0 0 0 1px rgba(0,0,0,.14)}' +
     '.twc-custom input{position:absolute;inset:-8px;width:44px;height:44px;opacity:0;cursor:pointer}' +
-    '.twc-pad{display:block;width:100%;background:var(--panel);border:1px solid var(--line);touch-action:none;cursor:move}' +
-    '.twc-row{display:flex;gap:16px;align-items:center;flex-wrap:wrap;margin-top:12px}' +
+    '.twc-pad{display:block;width:100%;max-height:160px;object-fit:contain;background:var(--panel);border:1px solid var(--line);touch-action:none;cursor:move}' +
+    '.twc-row{display:flex;gap:16px;align-items:center;flex-wrap:wrap;margin-top:8px}' +
     '.twc-link{font:inherit;font-size:12px;letter-spacing:.06em;text-transform:uppercase;background:none;border:0;padding:0;color:var(--ink);cursor:pointer;text-decoration:underline;text-decoration-color:rgba(34,34,34,.3);text-underline-offset:5px}' +
     '.twc-link:hover{text-decoration-color:var(--ink)}' +
     '.twc-link[disabled]{opacity:.35;cursor:default}' +
     '.twc-range{flex:1;min-width:120px;accent-color:#222}' +
     '.twc-input{width:100%;font:inherit;font-size:15px;padding:11px 12px;border:1px solid rgba(34,34,34,.22);background:rgba(255,255,255,.63);color:var(--ink);border-radius:0}' +
     '.twc-input:focus{outline:none;border-color:var(--ink)}' +
-    '.twc-actions{display:flex;flex-direction:column;gap:14px;margin-top:24px}' +
-    '.twc-btn{font:inherit;font-size:13px;letter-spacing:.04em;text-transform:uppercase;padding:16px;background:#222;color:#fbfbfb;border:1px solid #222;cursor:pointer;width:100%;transition:background .2s,color .2s}' +
+    '.twc-actions{display:flex;flex-direction:column;gap:10px;margin-top:16px}' +
+    '.twc-btn{font:inherit;font-size:13px;letter-spacing:.04em;text-transform:uppercase;padding:13px;background:#222;color:#fbfbfb;border:1px solid #222;cursor:pointer;width:100%;transition:background .2s,color .2s}' +
     '.twc-btn:hover{background:#fbfbfb;color:#222}' +
     '.twc-btn.is-ghost{background:transparent;color:#222}' +
     '.twc-btn.is-ghost:hover{background:#222;color:#fbfbfb}' +
@@ -146,6 +146,7 @@
     '.twc-files a{color:#222;font-size:14px;text-underline-offset:5px}' +
     '.twc-end{display:flex;justify-content:flex-end;gap:20px;align-items:center;margin-top:6px}' +
     '.twc-linkbox{font-size:12px;word-break:break-all;padding:10px 12px;background:#f2f2f2;color:#4a4a48}' +
+    '@media (min-width:992px){.twc-stage{position:sticky;top:0;align-self:start}.twc-panel{max-height:100vh;overflow-y:auto;overflow-x:hidden;padding-right:4px;scrollbar-width:thin;scrollbar-color:rgba(34,34,34,.15) transparent}}' +
     '@media (max-width:991px){.twc{grid-template-columns:1fr;gap:0}.twc-stage{position:sticky;top:64px;z-index:2;aspect-ratio:1/1;max-height:56vh}.twc-panel{padding-top:8px}}' +
     '@media (max-width:479px){.twc-two{grid-template-columns:1fr}.twc-sheet{padding:24px}}';
   var styleTag = document.createElement('style');
@@ -173,7 +174,7 @@
           '<div class="twc-row"><span class="twc-label">Size</span><input class="twc-range" type="range" min="0.12" max="1.1" step="0.01" aria-label="Artwork size"></div>' +
           '<div class="twc-row"><input class="twc-input" type="text" maxlength="30" placeholder="Add a line of text (optional)" aria-label="Text line">' +
             '<div class="twc-swatches" data-g="ink"></div></div>' +
-          '<p class="twc-note" style="margin-top:10px">PNG or SVG with a transparent background works best.</p></div>' +
+          '</div>' +
         '<div class="twc-actions">' +
           '<p class="twc-spec" data-spec></p>' +
           '<button class="twc-btn" type="button" data-a="download">Download renderings' + (hasFiles ? ' &amp; technical files' : '') + '</button>' +
@@ -291,7 +292,7 @@
   var labelCanvas = document.createElement('canvas');
   var labelTex = new THREE.CanvasTexture(labelCanvas);
   labelTex.encoding = THREE.sRGBEncoding; labelTex.anisotropy = renderer.capabilities.getMaxAnisotropy();
-  var labelMat = new THREE.MeshPhysicalMaterial({ map: labelTex, transparent: true, opacity: 0, side: THREE.DoubleSide, polygonOffset: true, polygonOffsetFactor: -2, roughness: 0.45, clearcoat: 0.4 });
+  var labelMat = new THREE.MeshPhysicalMaterial({ map: labelTex, transparent: true, opacity: 0, side: THREE.DoubleSide, polygonOffset: true, polygonOffsetFactor: -2, roughness: 0.45, clearcoat: 0 });
 
   // Real-world scale: 1 unit = 30mm
   var U = 1 / 30;
@@ -395,7 +396,8 @@
     capMat.metalness = state.capMetal ? 1 : 0;
     capMat.roughness = state.capMetal ? 0.3 : Math.min(F.roughness + 0.08, 0.9);
     capMat.clearcoat = state.capMetal ? 0 : F.clearcoat * 0.6;
-    bodyMat.needsUpdate = capMat.needsUpdate = true;
+    labelMat.roughness = F.roughness;
+    bodyMat.needsUpdate = capMat.needsUpdate = labelMat.needsUpdate = true;
     if (instant) { bodyMat.color.copy(lin(state.body)); capMat.color.copy(lin(state.capc)); }
   }
 
@@ -403,8 +405,12 @@
   var pad = $('.twc-pad'), range = $('.twc-range'), textIn = $('.twc-panel .twc-input');
   function sizeLabel() {
     labelCanvas.width = 1600; labelCanvas.height = Math.max(200, Math.round(1600 / labelSpec.aspect));
+    var maxH = 160;
     var w = pad.clientWidth || 360;
-    pad.width = Math.round(w * 2); pad.height = Math.round((w / labelSpec.aspect) * 2);
+    var h = Math.round(w / labelSpec.aspect);
+    if (h > maxH) { h = maxH; w = Math.round(h * labelSpec.aspect); }
+    pad.width = w * 2; pad.height = h * 2;
+    pad.style.width = w + 'px'; pad.style.height = h + 'px';
     labelTex.needsUpdate = true;
   }
   function box(kind, W, H, ctx) {
