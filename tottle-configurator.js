@@ -291,7 +291,7 @@
   var labelCanvas = document.createElement('canvas');
   var labelTex = new THREE.CanvasTexture(labelCanvas);
   labelTex.encoding = THREE.sRGBEncoding; labelTex.anisotropy = renderer.capabilities.getMaxAnisotropy();
-  var labelMat = new THREE.MeshPhysicalMaterial({ map: labelTex, transparent: true, side: THREE.DoubleSide, polygonOffset: true, polygonOffsetFactor: -2, roughness: 0.45, clearcoat: 0.4 });
+  var labelMat = new THREE.MeshPhysicalMaterial({ map: labelTex, transparent: true, opacity: 0, side: THREE.DoubleSide, polygonOffset: true, polygonOffsetFactor: -2, roughness: 0.45, clearcoat: 0.4 });
 
   // Real-world scale: 1 unit = 30mm
   var U = 1 / 30;
@@ -430,6 +430,8 @@
     var lc = labelCanvas.getContext('2d');
     lc.clearRect(0, 0, labelCanvas.width, labelCanvas.height);
     paint(lc, labelCanvas.width, labelCanvas.height);
+    var hasContent = !!(artImg || (state.text && state.text.trim()));
+    if (labelMat.opacity !== (hasContent ? 1 : 0)) { labelMat.opacity = hasContent ? 1 : 0; labelMat.needsUpdate = true; }
     labelTex.needsUpdate = true;
     var p = pad.getContext('2d'), W = pad.width, H = pad.height;
     p.clearRect(0, 0, W, H);
