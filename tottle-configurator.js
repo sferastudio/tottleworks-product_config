@@ -292,7 +292,7 @@
   var labelCanvas = document.createElement('canvas');
   var labelTex = new THREE.CanvasTexture(labelCanvas);
   labelTex.encoding = THREE.sRGBEncoding; labelTex.anisotropy = renderer.capabilities.getMaxAnisotropy();
-  var labelMat = new THREE.MeshPhysicalMaterial({ map: labelTex, transparent: true, opacity: 0, side: THREE.DoubleSide, polygonOffset: true, polygonOffsetFactor: -2, roughness: 0.45, clearcoat: 0 });
+  var labelMat = new THREE.MeshPhysicalMaterial({ map: labelTex, transparent: true, opacity: 0, side: THREE.FrontSide, polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -4, roughness: 0.45, clearcoat: 0 });
 
   // Real-world scale: 1 unit = 30mm
   var U = 1 / 30;
