@@ -305,10 +305,13 @@
     var dome = T.shape === 'dome' ? 0.35 : 0.16;
     var c = new THREE.SplineCurve([
       new THREE.Vector2(neck, 0.02 * h), new THREE.Vector2(neck + (r - neck) * 0.45, 0.06 * h), new THREE.Vector2(r * 0.94, 0.16 * h),
-      new THREE.Vector2(r, 0.26 * h), new THREE.Vector2(r, h * (1 - dome)), new THREE.Vector2(r * 0.9, h * (1 - dome * 0.35)),
+      // Straight wall: repeated points keep the spline flat here so the body
+      // never bulges past the label radius (Catmull-Rom overshoots otherwise).
+      new THREE.Vector2(r, 0.26 * h), new THREE.Vector2(r, 0.3 * h), new THREE.Vector2(r, h * (1 - dome) - 0.04 * h), new THREE.Vector2(r, h * (1 - dome)), new THREE.Vector2(r * 0.9, h * (1 - dome * 0.35)),
       new THREE.Vector2(r * 0.55, h * 0.995), new THREE.Vector2(0.001, h)
     ]);
-    return [new THREE.Vector2(0.001, 0), new THREE.Vector2(neck, 0)].concat(c.getPoints(100));
+    // Clamp to r: the spline must never bulge outside the label (r * 1.004).
+    return [new THREE.Vector2(0.001, 0), new THREE.Vector2(neck, 0)].concat(c.getPoints(100).map(function (p) { p.x = Math.min(p.x, r); return p; }));
   }
   function capProfile(rB, rT, h) {
     return [[0.001, 0], [rB - 0.04, 0], [rB - 0.01, 0.012], [rB, 0.045], [rT, h - 0.05], [rT - 0.012, h - 0.012], [rT - 0.05, h], [0.001, h]]
