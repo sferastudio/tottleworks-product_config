@@ -292,7 +292,7 @@
   var labelCanvas = document.createElement('canvas');
   var labelTex = new THREE.CanvasTexture(labelCanvas);
   labelTex.encoding = THREE.sRGBEncoding; labelTex.anisotropy = renderer.capabilities.getMaxAnisotropy();
-  var labelMat = new THREE.MeshPhysicalMaterial({ map: labelTex, transparent: true, opacity: 0, side: THREE.FrontSide, polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -4, roughness: 0.45, clearcoat: 0 });
+  var labelMat = new THREE.MeshPhysicalMaterial({ map: labelTex, transparent: true, opacity: 0, depthWrite: false, side: THREE.FrontSide, polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -4, roughness: 0.45, clearcoat: 0 });
 
   // Real-world scale: 1 unit = 30mm
   var U = 1 / 30;
@@ -333,6 +333,7 @@
     var arc = T.labelW ? T.labelW * U : r * phi * (1 + (1 / shapeDepth - 1) * 0.15);
     labelSpec = { aspect: arc / lh };
     var lm = new THREE.Mesh(new THREE.LatheGeometry([new THREE.Vector2(r * 1.004, ly0), new THREE.Vector2(r * 1.004, ly0 + lh)], 96, -phi / 2, phi), labelMat);
+    lm.renderOrder = 1;
     body.add(lm);
     body.scale.set(1, 1, shapeDepth);
     body.position.y = capH - 0.02;
