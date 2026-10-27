@@ -264,7 +264,7 @@
   renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 
   var scene = new THREE.Scene();
-  var camera = new THREE.PerspectiveCamera(26, 1, 0.05, 200);
+  var camera = new THREE.PerspectiveCamera(26, 1, 0.5, 60);
   var controls = new THREE.OrbitControls(camera, canvas);
   controls.enableDamping = true; controls.dampingFactor = 0.08; controls.enablePan = false;
   controls.minPolarAngle = 0.4; controls.maxPolarAngle = 1.62;
@@ -310,7 +310,7 @@
       new THREE.Vector2(r, 0.26 * h), new THREE.Vector2(r, 0.3 * h), new THREE.Vector2(r, h * (1 - dome) - 0.04 * h), new THREE.Vector2(r, h * (1 - dome)), new THREE.Vector2(r * 0.9, h * (1 - dome * 0.35)),
       new THREE.Vector2(r * 0.55, h * 0.995), new THREE.Vector2(0.001, h)
     ]);
-    // Clamp to r: the spline must never bulge outside the label (r * 1.004).
+    // Clamp to r: the spline must never bulge outside the label (r * 1.008).
     return [new THREE.Vector2(0.001, 0), new THREE.Vector2(neck, 0)].concat(c.getPoints(100).map(function (p) { p.x = Math.min(p.x, r); return p; }));
   }
   function capProfile(rB, rT, h) {
@@ -335,7 +335,7 @@
     var phi = Math.PI * 0.9;
     var arc = T.labelW ? T.labelW * U : r * phi * (1 + (1 / shapeDepth - 1) * 0.15);
     labelSpec = { aspect: arc / lh };
-    var lm = new THREE.Mesh(new THREE.LatheGeometry([new THREE.Vector2(r * 1.004, ly0), new THREE.Vector2(r * 1.004, ly0 + lh)], 96, -phi / 2, phi), labelMat);
+    var lm = new THREE.Mesh(new THREE.LatheGeometry([new THREE.Vector2(r * 1.008, ly0), new THREE.Vector2(r * 1.008, ly0 + lh)], 96, -phi / 2, phi), labelMat);
     lm.renderOrder = 1;
     body.add(lm);
     body.scale.set(1, 1, shapeDepth);
