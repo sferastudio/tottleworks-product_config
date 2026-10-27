@@ -400,7 +400,10 @@
     capMat.metalness = state.capMetal ? 1 : 0;
     capMat.roughness = state.capMetal ? 0.3 : Math.min(F.roughness + 0.08, 0.9);
     capMat.clearcoat = state.capMetal ? 0 : F.clearcoat * 0.6;
-    labelMat.roughness = F.roughness;
+    // Printed artwork: never glossier than ~satin, and damp the studio env so the
+    // 5.5-intensity panel can't mirror as a white blob over the label at head-on.
+    labelMat.roughness = Math.max(F.roughness, 0.55);
+    labelMat.envMapIntensity = 0.35;
     bodyMat.needsUpdate = capMat.needsUpdate = labelMat.needsUpdate = true;
     if (instant) { bodyMat.color.copy(lin(state.body)); capMat.color.copy(lin(state.capc)); }
   }
