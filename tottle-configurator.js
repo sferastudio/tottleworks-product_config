@@ -358,9 +358,28 @@
 
   // Optional: supplied 3D model. Naming convention for the 3D partner:
   // meshes containing "cap" get the overcap material, "label" gets the artwork, everything else the body material.
+  // Draco-compressed GLBs: pull the decoder in on demand so the page loader
+  // only needs THREE + OrbitControls + GLTFLoader.
+  var DRACO_BASE = 'https://cdn.jsdelivr.net/npm/three@0.147.0/examples/js';
+  function withDraco(cb) {
+    if (THREE.DRACOLoader) return cb();
+    var s = document.createElement('script');
+    s.src = DRACO_BASE + '/loaders/DRACOLoader.js';
+    s.onload = cb; s.onerror = cb; // no decoder → plain GLTFLoader still works for uncompressed files
+    document.head.appendChild(s);
+  }
   function loadModel(url) {
     if (!THREE.GLTFLoader) return buildProcedural();
-    new THREE.GLTFLoader().load(url, function (gltf) {
+    withDraco(function () { loadModelNow(url); });
+  }
+  function loadModelNow(url) {
+    var loader = new THREE.GLTFLoader();
+    if (THREE.DRACOLoader) {
+      var dl = new THREE.DRACOLoader();
+      dl.setDecoderPath(DRACO_BASE + '/libs/draco/');
+      loader.setDRACOLoader(dl);
+    }
+    loader.load(url, function (gltf) {
       var g = gltf.scene, hasLabel = false;
       g.traverse(function (o) {
         if (!o.isMesh) return;
