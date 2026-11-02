@@ -91,17 +91,52 @@
     });
 
     /* ---- filters ---- */
+    /* Groups follow Henry's Master Filter Spec. A group only shows when at least one card has a value for it.
+       Option order follows the spec; values not in the list are appended alphabetically. */
     var DEFS = [
-      { key: 'shape', attr: 'data-shape', title: 'Shape' },
-      { key: 'capacity', attr: 'data-capacity', title: 'Capacity' },
-      { key: 'material', attr: 'data-material', title: 'Material' },
-      { key: 'location', attr: 'data-location', title: 'Manufacturing location', multi: true }
+      { key: 'plastic', attr: 'data-plastic', title: 'Plastic',
+        order: ['Single Layer PE', 'Multi Layer EVOH', 'Mixed'] },
+      { key: 'recycled', attr: 'data-recycled', title: 'Recycled', order: ['Yes', 'No'] },
+      { key: 'shape', attr: 'data-shape', title: 'Shape',
+        order: ['Round', 'Rectangle', 'Oval', 'Unique', 'Custom'] },
+      { key: 'capacity', attr: 'data-capacity', title: 'Fill volume', numeric: true },
+      { key: 'colour', attr: 'data-colour', title: 'Custom colour options', multi: true,
+        order: ['Hex#', 'Pantone', 'Metallized'],
+        alias: { 'hex': 'Hex#', 'hex#': 'Hex#', 'custom pantone': 'Pantone', 'pantone': 'Pantone', 'metallised': 'Metallized', 'metallized': 'Metallized' } },
+      { key: 'decoration', attr: 'data-decoration', title: 'Decoration', multi: true,
+        order: ['Silkscreen', 'Hot Stamp', 'Offset', 'Adhesive Label'],
+        alias: { 'silk screen': 'Silkscreen', 'silkscreen': 'Silkscreen', 'silk-screen': 'Silkscreen', 'hot stamp': 'Hot Stamp', 'hot stamping': 'Hot Stamp',
+                 'hot-stamp': 'Hot Stamp', 'offset': 'Offset', 'label': 'Adhesive Label', 'labelling': 'Adhesive Label', 'labeling': 'Adhesive Label', 'adhesive label': 'Adhesive Label' } },
+      { key: 'finish', attr: 'data-finish', title: 'Finish', multi: true,
+        order: ['Soft Touch', 'Matte', 'Gloss', 'Metallized'],
+        alias: { 'soft touch': 'Soft Touch', 'soft-touch': 'Soft Touch', 'softtouch': 'Soft Touch', 'matte': 'Matte', 'matt': 'Matte', 'gloss': 'Gloss', 'glossy': 'Gloss',
+                 'metallized': 'Metallized', 'metallised': 'Metallized' } },
+      { key: 'location', attr: 'data-location', title: 'Country of origin', multi: true,
+        order: ['China', 'South Korea', 'Hong Kong', 'Taiwan', 'Europe', 'Americas'],
+        alias: { 'korea': 'South Korea', 'south korea': 'South Korea', 'republic of korea': 'South Korea' } }
     ];
     function norm(v) { return (v || '').replace(/\s+/g, ' ').trim().replace(/\bml\b/i, 'mL'); }
+    function canon(def, v) {
+      v = norm(v);
+      if (!v) return '';
+      var k = v.toLowerCase();
+      if (def.alias && def.alias[k]) return def.alias[k];
+      if (def.order) for (var i = 0; i < def.order.length; i++) if (def.order[i].toLowerCase() === k) return def.order[i];
+      return v;
+    }
     function vals(card, def) {
       var raw = card.getAttribute(def.attr) || '';
       var list = def.multi ? raw.split(/[;,|\n]/) : [raw];
-      return list.map(norm).filter(Boolean);
+      return list.map(function (x) { return canon(def, x); }).filter(Boolean);
+    }
+    function sortVals(def, arr) {
+      return arr.sort(function (a, b) {
+        if (def.order) {
+          var x = def.order.indexOf(a), y = def.order.indexOf(b);
+          if (x > -1 || y > -1) return (x < 0 ? 99 : x) - (y < 0 ? 99 : y);
+        }
+        return a.localeCompare(b, undefined, { numeric: true });
+      });
     }
     var state = {};
     DEFS.forEach(function (d) { state[d.key] = {}; });
@@ -114,7 +149,7 @@
           vals(c, def).forEach(function (v) { if (seen.indexOf(v) < 0) seen.push(v); });
         });
         if (!seen.length) return;
-        seen.sort(function (a, b) { return a.localeCompare(b, undefined, { numeric: true }); });
+        sortVals(def, seen);
         var g = document.createElement('div'); g.className = 'cl-group';
         var t = document.createElement('div'); t.className = 'cl-group-title'; t.textContent = def.title;
         g.appendChild(t);
