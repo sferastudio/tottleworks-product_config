@@ -91,26 +91,15 @@
     });
 
     /* ---- filters ---- */
-    /* Groups follow Henry's Master Filter Spec. A group only shows when at least one card has a value for it.
+    /* Groups follow Henry's confirmed filter list (Material, Shape, Fill volume, Country). A group only shows when at least one card has a value for it.
        Option order follows the spec; values not in the list are appended alphabetically. */
     var DEFS = [
-      { key: 'plastic', attr: 'data-plastic', title: 'Plastic',
-        order: ['Single Layer PE', 'Multi Layer EVOH', 'Mixed'] },
-      { key: 'recycled', attr: 'data-recycled', title: 'Recycled', order: ['Yes', 'No'] },
+      { key: 'plastic', attr: 'data-plastic', title: 'Material', multi: true,
+        order: ['Single Layer PE', 'Single Layer PP', 'PET', 'Multi Layer EVOH'],
+        alias: { 'pe': 'Single Layer PE', 'pp': 'Single Layer PP', 'pet': 'PET', 'evoh': 'Multi Layer EVOH' } },
       { key: 'shape', attr: 'data-shape', title: 'Shape',
-        order: ['Round', 'Rectangle', 'Oval', 'Unique', 'Custom'] },
+        order: ['Round', 'Rectangle', 'Oval', 'Unique'] },
       { key: 'capacity', attr: 'data-capacity', title: 'Fill volume', numeric: true },
-      { key: 'colour', attr: 'data-colour', title: 'Custom colour options', multi: true,
-        order: ['Hex#', 'Pantone', 'Metallized'],
-        alias: { 'hex': 'Hex#', 'hex#': 'Hex#', 'custom pantone': 'Pantone', 'pantone': 'Pantone', 'metallised': 'Metallized', 'metallized': 'Metallized' } },
-      { key: 'decoration', attr: 'data-decoration', title: 'Decoration', multi: true,
-        order: ['Silkscreen', 'Hot Stamp', 'Offset', 'Adhesive Label'],
-        alias: { 'silk screen': 'Silkscreen', 'silkscreen': 'Silkscreen', 'silk-screen': 'Silkscreen', 'hot stamp': 'Hot Stamp', 'hot stamping': 'Hot Stamp',
-                 'hot-stamp': 'Hot Stamp', 'offset': 'Offset', 'label': 'Adhesive Label', 'labelling': 'Adhesive Label', 'labeling': 'Adhesive Label', 'adhesive label': 'Adhesive Label' } },
-      { key: 'finish', attr: 'data-finish', title: 'Finish', multi: true,
-        order: ['Soft Touch', 'Matte', 'Gloss', 'Metallized'],
-        alias: { 'soft touch': 'Soft Touch', 'soft-touch': 'Soft Touch', 'softtouch': 'Soft Touch', 'matte': 'Matte', 'matt': 'Matte', 'gloss': 'Gloss', 'glossy': 'Gloss',
-                 'metallized': 'Metallized', 'metallised': 'Metallized' } },
       { key: 'location', attr: 'data-location', title: 'Country of origin', multi: true,
         order: ['China', 'South Korea', 'Hong Kong', 'Taiwan', 'Europe', 'Americas'],
         alias: { 'korea': 'South Korea', 'south korea': 'South Korea', 'republic of korea': 'South Korea' } }
