@@ -91,12 +91,15 @@
     });
 
     /* ---- filters ---- */
-    /* Groups follow Henry's confirmed filter list (Material, Shape, Fill volume, Country). A group only shows when at least one card has a value for it.
+    /* Groups follow Henry's confirmed filter list (Shape, Fill volume, Country; Material parked). A group only shows when at least one card has a value for it.
        Option order follows the spec; values not in the list are appended alphabetically. */
     var DEFS = [
-      { key: 'plastic', attr: 'data-plastic', title: 'Material', multi: true,
-        order: ['Single Layer PE', 'Single Layer PP', 'PET', 'Multi Layer EVOH'],
-        alias: { 'pe': 'Single Layer PE', 'pp': 'Single Layer PP', 'pet': 'PET', 'evoh': 'Multi Layer EVOH' } },
+      /* Material filter parked by client (Nov 2026): vendors can run many tottles in single or multi layer.
+         To re-enable, uncomment; tags live in the CMS field 'Material Filter' (data-plastic).
+      // { key: 'plastic', attr: 'data-plastic', title: 'Material', multi: true,
+      // order: ['Single Layer PE', 'Single Layer PP', 'PET', 'Multi Layer EVOH'],
+      // alias: { 'pe': 'Single Layer PE', 'pp': 'Single Layer PP', 'pet': 'PET', 'evoh': 'Multi Layer EVOH' } },
+      */
       { key: 'shape', attr: 'data-shape', title: 'Shape',
         order: ['Round', 'Rectangle', 'Oval', 'Unique'] },
       { key: 'capacity', attr: 'data-capacity', title: 'Fill volume', numeric: true },
