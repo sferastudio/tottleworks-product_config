@@ -146,6 +146,8 @@
     '.twc-files a{color:#222;font-size:14px;text-underline-offset:5px}' +
     '.twc-end{display:flex;justify-content:flex-end;gap:20px;align-items:center;margin-top:6px}' +
     '.twc-linkbox{font-size:12px;word-break:break-all;padding:10px 12px;background:#f2f2f2;color:#4a4a48}' +
+    '.twc-modelcheck{position:absolute;left:12px;right:12px;bottom:44px;z-index:3;background:#fff8e6;border:1px solid #e0b35a;color:#222;font-family:"IBM Plex Sans",Arial,sans-serif;font-size:13px;line-height:1.45;padding:12px 40px 12px 14px;max-height:70%;overflow:auto}' +
+    '.twc-modelcheck strong{display:block;margin-bottom:6px}.twc-modelcheck ul{margin:0;padding-left:18px}.twc-modelcheck li{margin:3px 0}.twc-modelcheck p{margin:8px 0 0;font-size:11px;color:#6b5a30}.twc-modelcheck button{position:absolute;top:6px;right:8px;border:0;background:none;font-size:18px;cursor:pointer;color:#6b5a30;min-width:32px;min-height:32px}' +
     '@media (min-width:992px){.twc-stage{position:sticky;top:var(--twc-top);align-self:start;max-height:min(82vh,calc(100vh - var(--twc-top) - 24px))}.twc-panel{max-height:calc(100vh - var(--twc-top));overflow-y:auto;overflow-x:hidden;padding:0 10px 24px 0;scrollbar-width:thin;scrollbar-color:rgba(34,34,34,.15) transparent}.twc-group:first-child{border-top:0;padding-top:0}}' +
     '@media (max-width:991px){.twc{grid-template-columns:1fr;gap:0}.twc-stage{position:sticky;top:var(--twc-top-m,64px);z-index:2;aspect-ratio:4/3;max-height:46vh;box-shadow:0 0 0 10px var(--bg)}.twc-panel{padding:20px 0 40px}.twc-group:first-child{border-top:0}}' +
     '@media (max-width:991px) and (max-height:540px){.twc-stage{position:relative;top:auto;max-height:85vh;aspect-ratio:16/10;box-shadow:none}}' +
@@ -385,13 +387,46 @@
       ang[i] = a; rs += Math.hypot(x, z);
       if (a < amin) amin = a; if (a > amax) amax = a; if (y < ymin) ymin = y; if (y > ymax) ymax = y;
     }
-    var arc = (amax - amin) || 1, hh = (ymax - ymin) || 1;
+    var arc = (amax - amin) || 1, hh = (ymax - ymin) || 1, mean = rs / n, dev = 0;
+    for (i = 0; i < n; i++) dev += Math.abs(Math.hypot(pos.getX(i), pos.getZ(i)) - mean);
+    mesh.userData.twcRadiusSpread = (dev / n) / (mean || 1);
     if (!g.attributes.uv) {
       var uv = new Float32Array(n * 2);
       for (i = 0; i < n; i++) { uv[i * 2] = (ang[i] - amin) / arc; uv[i * 2 + 1] = (pos.getY(i) - ymin) / hh; }
       g.setAttribute('uv', new THREE.BufferAttribute(uv, 2));
     }
     return (arc * (rs / n)) / hh;
+  }
+  // Model check: tells whoever is adding a GLB what is wrong with it, instead of failing silently.
+  // Always logged to the console; shown on the page on the staging domain or with ?twc-check in the URL.
+  var CHECK_VISIBLE = /(^|[?&#])twc-check/.test(location.search + location.hash) || /\.webflow\.io$/.test(location.hostname);
+  function reportModel(url, issues, ok) {
+    var tag = '[Tottle configurator] 3D model check for "' + T.name + '"';
+    if (!issues.length) { console.info(tag + ': OK'); return; }
+    console.warn(tag + '\n' + url + '\n- ' + issues.join('\n- '));
+    if (!CHECK_VISIBLE) return;
+    var el = document.createElement('div');
+    el.className = 'twc-modelcheck';
+    el.innerHTML = '<strong>3D model check · ' + esc(T.name) + '</strong><ul>' + issues.map(function (m) { return '<li>' + esc(m) + '</li>'; }).join('') + '</ul>' +
+      '<p>' + (ok ? 'The model is showing, but fix the points above so it behaves like the other tottles.' : 'The built-in placeholder is showing instead.') + ' Only visible on staging or with ?twc-check in the address. Press × to dismiss.</p><button type="button" aria-label="Dismiss">×</button>';
+    el.querySelector('button').addEventListener('click', function () { el.remove(); });
+    $('.twc-stage').appendChild(el);
+  }
+  function inspectModel(g, meshes, size, hasLabel, labelMesh) {
+    var issues = [], names = meshes.map(function (m) { return m.name || '(unnamed)'; });
+    if (!meshes.length) issues.push('The file contains no meshes.');
+    if (!hasLabel) issues.push('No mesh with "label" in its name, so artwork cannot be placed. Found: ' + names.join(', ') + '.');
+    if (!meshes.some(function (m) { return /cap/i.test(m.name); })) issues.push('No mesh with "cap" in its name, so the overcap colour has nothing to apply to.');
+    if (meshes.length && meshes.every(function (m) { return /cap|label|nozzle/i.test(m.name); })) issues.push('No body mesh: every mesh is named as a cap, nozzle or label.');
+    if (size.y < Math.max(size.x, size.z)) issues.push('The model is wider than it is tall (' + size.x.toFixed(1) + ' × ' + size.y.toFixed(1) + ' × ' + size.z.toFixed(1) + '). Export it upright, with Y pointing up.');
+    var ratio = size.y / (T.H || 1);
+    if (T.H && (ratio < 0.5 || ratio > 2) && !(ratio > 0.0005 && ratio < 0.002)) issues.push('The model is ' + size.y.toFixed(1) + ' units tall but the CMS height is ' + T.H + ' mm. Export in millimetres (1 unit = 1 mm) or correct the CMS height.');
+    if (T.H && T.L && size.y) { var want = T.L / T.H, got = Math.max(size.x, size.z) / size.y; if (Math.abs(got - want) / want > 0.25) issues.push('Proportions do not match the CMS (model ' + (got * T.H).toFixed(0) + ' mm wide at ' + T.H + ' mm tall; CMS says ' + T.L + ' mm). Check this is the right tottle\'s file.'); }
+    if (labelMesh && labelMesh.userData.twcRadiusSpread > 0.15) issues.push('The label is not centred on the model\'s vertical axis, so artwork will wrap unevenly. Keep the bottle axis at X = 0, Z = 0.');
+    var dup = names.filter(function (n, i) { return /\.?\d{3}$/.test(n) && names.indexOf(n.replace(/\.?\d{3}$/, '')) > -1; });
+    if (dup.length) issues.push('Possible duplicate meshes: ' + dup.join(', ') + '. Delete leftover copies before exporting.');
+    if (!T.labelH || !T.labelW) issues.push('Label height / wrap width are not set in the CMS; the artwork area is being estimated from the mesh.');
+    return issues;
   }
   function loadModelNow(url) {
     var loader = new THREE.GLTFLoader();
@@ -401,16 +436,18 @@
       loader.setDRACOLoader(dl);
     }
     loader.load(url, function (gltf) {
-      var g = gltf.scene, hasLabel = false, autoAspect = 0;
+      var g = gltf.scene, hasLabel = false, autoAspect = 0, meshes = [], labelMesh = null;
       g.traverse(function (o) {
         if (!o.isMesh) return;
+        meshes.push(o);
         var n = (o.name || '').toLowerCase();
         o.castShadow = true;
-        if (n.indexOf('label') > -1) { o.material = labelMat; hasLabel = true; autoAspect = ensureLabelUV(o) || autoAspect; }
+        if (n.indexOf('label') > -1) { o.material = labelMat; hasLabel = true; labelMesh = o; autoAspect = ensureLabelUV(o) || autoAspect; }
         else if (n.indexOf('cap') > -1 || n.indexOf('nozzle') > -1) o.material = capMat;
         else o.material = bodyMat;
       });
       var box = new THREE.Box3().setFromObject(g), size = box.getSize(new THREE.Vector3());
+      reportModel(url, inspectModel(g, meshes, size, hasLabel, labelMesh), true);
       var s = (T.H * U) / (size.y || 1);
       g.scale.setScalar(s);
       box.setFromObject(g);
@@ -420,7 +457,10 @@
       labelSpec = { aspect: T.labelW && T.labelH ? T.labelW / T.labelH : (autoAspect || 2) };
       if (!hasLabel) $('.twc-group:nth-of-type(5) .twc-value').textContent = 'Label area not set on this model';
       sizeLabel(); drawLabel(); frame(T.H * U); ready();
-    }, undefined, function () { buildProcedural(); sizeLabel(); drawLabel(); ready(); });
+    }, undefined, function (err) {
+      reportModel(url, ['The model could not be loaded' + (err && err.message ? ' (' + err.message + ')' : '') + '. Check the URL opens in a browser tab, that the host allows cross-origin loading (CORS), and that the file is a .glb.'], false);
+      buildProcedural(); sizeLabel(); drawLabel(); ready();
+    });
   }
 
   var HOME = new THREE.Vector3(), TARGET = new THREE.Vector3();
