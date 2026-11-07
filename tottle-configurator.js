@@ -36,6 +36,30 @@
     matte: { name: 'Matte', roughness: 0.68, clearcoat: 0, ccr: 0.5 },
     'soft-touch': { name: 'Soft-touch', roughness: 0.9, clearcoat: 0, ccr: 0.8 }
   };
+  // Pantone references: the code is what goes to the factory; the hex is only a screen approximation
+  // (commonly published sRGB values for the Coated library). Anything not listed still records the code
+  // and the customer can add a hex for the preview.
+  var PANTONE = {
+    'black c': '2D2926', 'cool gray 1 c': 'D9D9D6', 'cool gray 3 c': 'C8C9C7', 'cool gray 5 c': 'B1B3B3', 'cool gray 7 c': '97999B', 'cool gray 9 c': '75787B', 'cool gray 11 c': '53565A',
+    'warm gray 1 c': 'D7D2CB', 'warm gray 3 c': 'BFB8AF', 'warm gray 5 c': 'ACA39A', 'warm gray 7 c': '968C83', 'warm gray 9 c': '83786F', 'warm gray 11 c': '6E6259',
+    '7527 c': 'D6D2C4', '7528 c': 'C5B9AC', '7529 c': 'B7A99A', '7530 c': 'A39382', '7531 c': '7A6855', '7499 c': 'F1E6B2', '7401 c': 'F5E1A4', '7402 c': 'ECD898',
+    '468 c': 'DDCBA4', '4685 c': 'E0C09F', '1205 c': 'F8E08E', '123 c': 'FFC72C', '186 c': 'C8102E', '485 c': 'DA291C', '1795 c': 'D22630', '2945 c': '004C97', '300 c': '005EB8',
+    '7462 c': '00558C', '548 c': '003D4C', '348 c': '00843D', '3425 c': '006341', '5747 c': '3D441E', '5807 c': 'D0D1AB', '871 c': '84754E', '877 c': '8A8D8F', '9080 c': 'EDEADB'
+  };
+  // Accepts "#D3C3A8", "D3C3A8", "PMS 7499 C", "Pantone Cool Gray 7 C", "7499". Returns {hex, name, ref} or {error}.
+  function parseColourInput(raw) {
+    var v = String(raw || '').trim();
+    if (!v) return { error: 'Enter a hex code or a Pantone reference.' };
+    var h = v.replace(/^#/, '');
+    if (/^[0-9a-f]{3}$/i.test(h)) h = h.replace(/./g, function (c) { return c + c; });
+    if (/^[0-9a-f]{6}$/i.test(h)) return { hex: '#' + h.toUpperCase(), name: 'Hex #' + h.toUpperCase(), ref: '' };
+    var key = v.toLowerCase().replace(/^(pms|pantone)\s*/, '').replace(/\s+/g, ' ').trim();
+    if (!/ (c|u|cp|tcx|tpx)$/.test(key)) key += ' c';
+    var ref = 'Pantone ' + key.toUpperCase().replace(/\b(COOL|WARM) GRAY\b/, function (m) { return m.charAt(0) + m.slice(1).toLowerCase().replace(' g', ' G'); });
+    if (PANTONE[key]) return { hex: '#' + PANTONE[key], name: ref, ref: ref, approx: true };
+    if (/^\d{2,5}( c| u| cp)?$|gray \d{1,2} c$/.test(key)) return { hex: null, name: ref, ref: ref, approx: true };
+    return { error: 'Use a hex code like #D3C3A8 or a Pantone reference like 7499 C.' };
+  }
   var INK_COLOURS = [{ name: 'Black', hex: '#1D1D1F' }, { name: 'White', hex: '#FFFFFF' }, { name: 'Gold foil', hex: '#B8913A' }];
 
   /* ---------------------------------------------------------------- helpers */
@@ -72,7 +96,7 @@
   var state = {
     cap: capKeys[0], finish: finishKeys[0],
     body: bodyColours[0].hex, bodyName: bodyColours[0].name,
-    capc: '#232325', capcName: 'Charcoal', capMetal: false,
+    capc: '#232325', capcName: 'Charcoal', capMetal: false, bodyRef: '', capcRef: '',
     text: '', ink: '#1D1D1F',
     art: { x: 0.5, y: 0.42, s: 0.5 }, txt: { x: 0.5, y: 0.8, s: 0.16 }
   };
@@ -81,7 +105,7 @@
     var m = location.hash.match(/design=([^&]+)/);
     if (m) {
       var saved = JSON.parse(decodeURIComponent(escape(atob(decodeURIComponent(m[1])))));
-      ['cap', 'finish', 'body', 'bodyName', 'capc', 'capcName', 'capMetal', 'text', 'ink', 'art', 'txt'].forEach(function (k) { if (saved[k] !== undefined) state[k] = saved[k]; });
+      ['cap', 'finish', 'body', 'bodyName', 'bodyRef', 'capc', 'capcName', 'capcRef', 'capMetal', 'text', 'ink', 'art', 'txt'].forEach(function (k) { if (saved[k] !== undefined) state[k] = saved[k]; });
       if (!CAPS[state.cap]) state.cap = capKeys[0];
       if (!FINISHES[state.finish]) state.finish = finishKeys[0];
     }
@@ -127,6 +151,8 @@
     '.twc-btn:hover{background:#fbfbfb;color:#222}' +
     '.twc-btn.is-ghost{background:transparent;color:#222}' +
     '.twc-btn.is-ghost:hover{background:#222;color:#fbfbfb}' +
+    '.twc-code{margin-top:12px}.twc-code summary{cursor:pointer;list-style:none;font-family:"IBM Plex Sans",sans-serif;font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:var(--ink);text-decoration:underline;text-decoration-color:rgba(34,34,34,.3);text-underline-offset:5px;padding:4px 0;display:inline-block}.twc-code summary::-webkit-details-marker{display:none}.twc-code[open] summary{text-decoration-color:var(--ink)}' +
+    '.twc-code-row{display:flex;gap:8px;margin-top:10px}.twc-code-row .twc-input{flex:1;min-width:0;text-transform:uppercase}.twc-code-row .twc-input::placeholder{text-transform:none}.twc-code-row .twc-btn{width:auto;padding:0 18px;min-height:0}.twc-code .twc-msg{margin-top:8px}' +
     '.twc-spec{font-size:13px;line-height:1.5;color:var(--ink2);margin:0 0 4px}' +
     '.twc-note{font-size:12px;color:var(--muted);margin:0}' +
     '.twc-modal{position:fixed;inset:0;z-index:1000;display:none;align-items:center;justify-content:center;padding:max(16px,env(safe-area-inset-top)) max(16px,env(safe-area-inset-right)) max(16px,env(safe-area-inset-bottom)) max(16px,env(safe-area-inset-left));background:rgba(20,20,20,.45)}' +
@@ -167,8 +193,8 @@
         '<div class="twc-hint">Drag to rotate · Scroll to zoom</div></div>' +
       '<div class="twc-panel">' +
         group('Overcap', 'cap', '<div class="twc-pills" data-g="cap"></div>') +
-        group('Tottle colour', 'body', '<div class="twc-swatches" data-g="body"></div>') +
-        group('Overcap colour', 'capc', '<div class="twc-swatches" data-g="capc"></div>') +
+        group('Tottle colour', 'body', '<div class="twc-swatches" data-g="body"></div>' + codeRow('body')) +
+        group('Overcap colour', 'capc', '<div class="twc-swatches" data-g="capc"></div>' + codeRow('capc')) +
         group('Finish', 'finish', '<div class="twc-pills" data-g="finish"></div>') +
         '<div class="twc-group"><div class="twc-head"><span class="twc-label">Your artwork</span><span class="twc-value">Drag to position</span></div>' +
           '<canvas class="twc-pad" aria-label="Print area. Drag your artwork or text to position it."></canvas>' +
@@ -210,6 +236,12 @@
         '<div class="twc-end"><button class="twc-link" type="button" data-copy>Copy link</button><button class="twc-btn" type="submit" style="width:auto;padding:14px 22px">Send</button></div>' +
       '</form>');
 
+  function codeRow(key) {
+    return '<details class="twc-code" data-code="' + key + '"><summary>Enter a hex or Pantone reference</summary>' +
+      '<div class="twc-code-row"><input class="twc-input" type="text" inputmode="text" autocomplete="off" spellcheck="false" maxlength="24" placeholder="#D3C3A8 or PMS 7499 C" aria-label="Hex or Pantone reference">' +
+      '<button type="button" class="twc-btn is-ghost twc-code-apply">Apply</button></div>' +
+      '<p class="twc-msg" aria-live="polite"></p></details>';
+  }
   function group(label, key, inner) {
     return '<div class="twc-group"><div class="twc-head"><span class="twc-label">' + label + '</span><span class="twc-value" data-v="' + key + '"></span></div>' + inner + '</div>';
   }
@@ -250,6 +282,26 @@
   swatches('body', bodyColours, function (c) { state.body = c.hex; state.bodyName = c.name; onChange('colour'); }, true);
   swatches('capc', CAP_COLOURS, function (c) { state.capc = c.hex; state.capcName = c.name; state.capMetal = !!c.metal; onChange('colour'); }, true);
   swatches('ink', INK_COLOURS, function (c) { state.ink = c.hex; drawLabel(); }, false);
+  function codeInput(key) {
+    var box = $('[data-code="' + key + '"]'), input = box.querySelector('input'), msg = box.querySelector('.twc-msg');
+    var apply = function () {
+      var r = parseColourInput(input.value);
+      msg.classList.toggle('is-err', !!r.error);
+      if (r.error) { msg.textContent = r.error; return; }
+      $$('[data-g="' + key + '"] [data-i]').forEach(function (x) { x.setAttribute('aria-pressed', 'false'); });
+      if (key === 'body') { if (r.hex) state.body = r.hex; state.bodyName = r.name; state.bodyRef = r.ref; }
+      else { if (r.hex) state.capc = r.hex; state.capcName = r.name; state.capcRef = r.ref; state.capMetal = false; }
+      msg.textContent = r.hex ? (r.approx ? r.ref + ' recorded. The on-screen colour is an approximation; your Pantone reference is what we quote against.' : r.name + ' applied.')
+        : r.ref + ' recorded for your quote. Add a hex code too if you would like to preview it on screen.';
+      onChange('colour');
+    };
+    box.querySelector('.twc-code-apply').addEventListener('click', apply);
+    input.addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); apply(); } });
+    // picking a swatch clears the typed reference
+    $('[data-g="' + key + '"]').addEventListener('click', function (e) { if (e.target.closest('[data-i]')) { state[key + 'Ref'] = ''; msg.textContent = ''; input.value = ''; } });
+    if (state[key + 'Ref']) { input.value = state[key + 'Ref'].replace(/^Pantone /, ''); box.open = true; }
+  }
+  codeInput('body'); codeInput('capc');
 
   /* ---------------------------------------------------------------- scene */
   var canvas = $('.twc-stage canvas');
@@ -574,7 +626,7 @@
 
   /* ---------------------------------------------------------------- state → UI */
   var specLine = function () {
-    return T.name + (T.capacity ? ' ' + T.capacity : '') + ' · ' + CAPS[state.cap].name + ' · ' + state.bodyName + ' with ' + state.capcName.toLowerCase() + ' overcap · ' + FINISHES[state.finish].name;
+    return T.name + (T.capacity ? ' ' + T.capacity : '') + ' · ' + CAPS[state.cap].name + ' · ' + state.bodyName + ' with ' + (/^(Hex|Pantone) /.test(state.capcName) ? state.capcName : state.capcName.toLowerCase()) + ' overcap · ' + FINISHES[state.finish].name;
   };
   function updateLabels() {
     $('[data-v="cap"]').textContent = CAPS[state.cap].name;
@@ -663,7 +715,7 @@
 
   /* ---------------------------------------------------------------- share link */
   function designCode() {
-    var s = { cap: state.cap, finish: state.finish, body: state.body, bodyName: state.bodyName, capc: state.capc, capcName: state.capcName, capMetal: state.capMetal, text: state.text, ink: state.ink, art: state.art, txt: state.txt };
+    var s = { cap: state.cap, finish: state.finish, body: state.body, bodyName: state.bodyName, capc: state.capc, capcName: state.capcName, capMetal: state.capMetal, bodyRef: state.bodyRef, capcRef: state.capcRef, text: state.text, ink: state.ink, art: state.art, txt: state.txt };
     return encodeURIComponent(btoa(unescape(encodeURIComponent(JSON.stringify(s)))));
   }
   var designUrl = function () { return location.href.split('#')[0] + '#design=' + designCode(); };
@@ -672,7 +724,7 @@
   function sendLead(fields) {
     var form = document.querySelector('[data-twc-lead] form') || document.querySelector('form[data-twc-lead]');
     if (!form) return false;
-    var base = { 'Lead type': '', Name: '', Email: '', Company: '', Updates: '', Tottle: T.name, Design: specLine(), 'Design link': designUrl(), Colleagues: '', Note: '', Page: location.href.split('#')[0] };
+    var base = { 'Lead type': '', Name: '', Email: '', Company: '', Updates: '', Tottle: T.name, Design: specLine(), 'Tottle colour': state.bodyName + ' (' + state.body.toUpperCase() + ')', 'Overcap colour': state.capcName + ' (' + state.capc.toUpperCase() + ')', 'Design link': designUrl(), Colleagues: '', Note: '', Page: location.href.split('#')[0] };
     Object.keys(fields).forEach(function (k) { base[k] = fields[k]; });
     Object.keys(base).forEach(function (k) {
       var el = form.querySelector('[name="' + k + '"]');
