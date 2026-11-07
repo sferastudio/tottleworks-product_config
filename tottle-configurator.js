@@ -105,9 +105,12 @@
   };
 
   // Overcaps / colours / finishes can be narrowed per tottle from the CMS lists
-  var capKeys = Object.keys(CAPS);
+  // Overcap choice is opt-in: it exists only when the tottle's CMS item lists two or more overcaps
+  // (and, once a model is loaded, only for variants the file contains). Tottle Works' spec has no
+  // overcap option, so by default there is no Overcap group and the cap is whatever the model has.
   var cmsCaps = list(d.overcaps).map(slug).filter(function (k) { return CAPS[k]; });
-  if (cmsCaps.length) capKeys = cmsCaps;
+  var capChoice = cmsCaps.length >= 2;
+  var capKeys = capChoice ? cmsCaps : [Object.keys(CAPS)[0]];
   var finishKeys = Object.keys(FINISHES);
   var cmsFin = list(d.finishes).map(function (n) { var k = slug(n); return FINISHES[k] ? k : FINISH_ALIAS[k]; }).filter(Boolean);
   if (cmsFin.length) finishKeys = cmsFin.filter(function (k, i, a) { return a.indexOf(k) === i; });
@@ -226,13 +229,13 @@
         '<button class="twc-reset" type="button">Reset view</button>' +
         '<div class="twc-hint">Drag to rotate · Scroll to zoom</div></div>' +
       '<div class="twc-panel">' +
-        group('Overcap', 'cap', '<div class="twc-pills" data-g="cap"></div>') +
+        (capChoice ? group('Overcap', 'cap', '<div class="twc-pills" data-g="cap"></div>') : '') +
         group('Tottle colour', 'body', '<div class="twc-swatches" data-g="body"></div>' + codeRow('body')) +
         group('Overcap colour', 'capc', '<div class="twc-swatches" data-g="capc"></div>' + codeRow('capc')) +
         group('Finish', 'finish', '<div class="twc-pills" data-g="finish"></div>') +
         (decoKeys.length ? group('Decoration', 'deco', '<div class="twc-pills" data-g="deco"></div>') : '') +
         (recycledKeys.length ? group('Resin', 'resin', '<div class="twc-pills" data-g="resin"></div>') : '') +
-        '<div class="twc-group"><div class="twc-head"><span class="twc-label">Your artwork</span><span class="twc-value">Drag to position</span></div>' +
+        '<div class="twc-group"><div class="twc-head"><span class="twc-label">Your artwork</span><span class="twc-value" data-art-head>Drag to position</span></div>' +
           '<canvas class="twc-pad" aria-label="Print area. Drag your artwork or text to position it."></canvas>' +
           '<div class="twc-row"><button class="twc-link" type="button" data-a="upload">Upload artwork</button>' +
             '<button class="twc-link" type="button" data-a="remove" disabled>Remove</button>' +
@@ -316,7 +319,7 @@
       onPick({ name: 'Custom ' + e.target.value.toUpperCase(), hex: e.target.value });
     });
   }
-  pills('cap', capKeys, CAPS);
+  if (capChoice) pills('cap', capKeys, CAPS);
   pills('finish', finishKeys, FINISHES);
   if (decoKeys.length) pills('deco', decoKeys, DECORATIONS);
   if (recycledKeys.length) pills('resin', recycledKeys, RECYCLED);
@@ -517,8 +520,9 @@
   function inspectModel(g, meshes, size, hasLabel, labelMesh, found) {
     var issues = [], names = meshes.map(function (m) { return m.name || '(unnamed)'; });
     var wanted = list(d.overcaps).map(slug).filter(function (k) { return CAPS[k]; });
-    if (!found.length && wanted.length > 1) issues.push('The CMS lists ' + wanted.length + ' overcaps but the file has one unnamed cap, so the Overcap choice is hidden. Include each variant in the file with its name, e.g. Cap_FlipTop, Cap_DiscTop, Cap_TallOvercap.');
-    else if (found.length) {
+    if (wanted.length < 2) { if (found.length > 1) issues.push('The file contains ' + found.length + ' overcap variants (' + found.map(function (k) { return CAPS[k].name; }).join(', ') + ') but the CMS lists no overcap choice, so only ' + CAPS[CAPS_ORDER.filter(function (k) { return found.indexOf(k) > -1; })[0]].name + ' is shown. List the variants in Overcap Options to offer the choice.'); }
+    else if (!found.length) issues.push('The CMS lists ' + wanted.length + ' overcaps but the file has one unnamed cap, so the Overcap choice is hidden. Include each variant in the file with its name, e.g. Cap_FlipTop, Cap_DiscTop, Cap_TallOvercap.');
+    else {
       var missing = wanted.filter(function (k) { return found.indexOf(k) < 0; });
       var extra = found.filter(function (k) { return wanted.length && wanted.indexOf(k) < 0; });
       if (missing.length) issues.push('The CMS lists ' + missing.map(function (k) { return CAPS[k].name; }).join(', ') + ' but the file has no cap named for ' + (missing.length > 1 ? 'them' : 'it') + '; only ' + found.map(function (k) { return CAPS[k].name; }).join(', ') + ' can be offered.');
@@ -544,11 +548,10 @@
     else if (list(d.finishes).length !== finishKeys.length) issues.push('Some finish options were not recognised: ' + list(d.finishes).filter(function (n) { var k = slug(n); return !(FINISHES[k] || FINISH_ALIAS[k]); }).join(', ') + '. Use Soft Touch, Matte, Gloss or Metallized.');
     if (!list(d.colours).length) issues.push('Colour options are not set for this tottle; hex, Pantone and metallized are all being offered.');
     if (list(d.decoration).length && list(d.decoration).length !== decoKeys.length) issues.push('Some decoration methods were not recognised: ' + list(d.decoration).filter(function (n) { var k = slug(n); return !(DECORATIONS[k] || DECO_ALIAS[k]); }).join(', ') + '. Use Silkscreen, Hot Stamp, Offset or Adhesive Label.');
-    if (!list(d.overcaps).length) issues.push('Overcap options are not set for this tottle; all overcaps are being offered.');
     if (!T.model) issues.push('No 3D model URL on this tottle; the generic placeholder shape is showing.');
     if (issues.length) reportModel('CMS fields', issues, true);
   }
-  var CAPS_ORDER = Object.keys(CAPS), modelVariants = [], capChoice = true;
+  var CAPS_ORDER = Object.keys(CAPS), modelVariants = [];
   function applyCapVariant(g) {
     g.traverse(function (o) { if (o.userData.twcVariant) o.visible = o.userData.twcVariant === state.cap; });
   }
@@ -586,7 +589,7 @@
         }
         else o.material = bodyMat;
       });
-      modelVariants = Object.keys(variants).filter(function (k) { return capKeys.indexOf(k) > -1 || !cmsCaps.length; });
+      modelVariants = capChoice ? Object.keys(variants).filter(function (k) { return capKeys.indexOf(k) > -1; }) : [];
       if (modelVariants.length) {
         // Offer only the variants this file contains (within what the CMS allows); hide the others' geometry.
         capKeys = CAPS_ORDER.filter(function (k) { return modelVariants.indexOf(k) > -1; });
@@ -594,9 +597,11 @@
         pills('cap', capKeys, CAPS);
         applyCapVariant(g);
       } else {
-        // One unnamed cap: show it as modelled and take away a choice that would change nothing.
-        var capGroup = $('[data-g="cap"]').closest('.twc-group'); if (capGroup) capGroup.hidden = true;
-        state.cap = capKeys[0]; capChoice = false; updateLabels();
+        // No usable variants: show the file as modelled, with no choice that would change nothing.
+        var capEl = $('[data-g="cap"]'); if (capEl) capEl.closest('.twc-group').hidden = true;
+        var first = CAPS_ORDER.filter(function (k) { return variants[k]; })[0];
+        if (first) g.traverse(function (o) { if (o.userData.twcVariant) o.visible = o.userData.twcVariant === first; });
+        state.cap = first || capKeys[0]; capChoice = false; updateLabels();
       }
       var box = visibleBox(g), size = box.getSize(new THREE.Vector3());
       reportModel(url, inspectModel(g, meshes, size, hasLabel, labelMesh, Object.keys(variants)), true);
@@ -607,7 +612,7 @@
       disposeGroup(parts.body); disposeGroup(parts.cap);
       product.add(g); parts.model = g;
       labelSpec = { aspect: T.labelW && T.labelH ? T.labelW / T.labelH : (autoAspect || 2) };
-      if (!hasLabel) $('.twc-group:nth-of-type(5) .twc-value').textContent = 'Label area not set on this model';
+      if (!hasLabel && $('[data-art-head]')) $('[data-art-head]').textContent = 'Label area not set on this model';
       sizeLabel(); drawLabel(); frame(T.H * U); ready();
     }, undefined, function (err) {
       reportModel(url, ['The model could not be loaded' + (err && err.message ? ' (' + err.message + ')' : '') + '. Check the URL opens in a browser tab, that the host allows cross-origin loading (CORS), and that the file is a .glb.'], false);
@@ -731,7 +736,7 @@
     return T.name + (T.capacity ? ' ' + T.capacity : '') + (capChoice ? ' · ' + CAPS[state.cap].name : '') + ' · ' + state.bodyName + ' with ' + (/^(Hex|Pantone) /.test(state.capcName) ? state.capcName : state.capcName.toLowerCase()) + ' overcap · ' + FINISHES[state.finish].name + (state.deco ? ' · ' + DECORATIONS[state.deco].name : '') + (state.resin ? ' · ' + RECYCLED[state.resin].name : '');
   };
   function updateLabels() {
-    $('[data-v="cap"]').textContent = CAPS[state.cap].name;
+    if ($('[data-v="cap"]')) $('[data-v="cap"]').textContent = CAPS[state.cap].name;
     $('[data-v="finish"]').textContent = FINISHES[state.finish].name;
     if (state.deco && $('[data-v="deco"]')) $('[data-v="deco"]').textContent = DECORATIONS[state.deco].name;
     if (state.resin && $('[data-v="resin"]')) $('[data-v="resin"]').textContent = RECYCLED[state.resin].name;
