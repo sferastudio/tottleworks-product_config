@@ -202,7 +202,7 @@
             '<button class="twc-link" type="button" data-a="remove" disabled>Remove</button>' +
             '<input type="file" accept="image/png,image/jpeg,image/svg+xml,image/webp" hidden></div>' +
           '<div class="twc-row"><span class="twc-label">Size</span><input class="twc-range" type="range" min="0.12" max="1.1" step="0.01" aria-label="Artwork size"></div>' +
-          '<div class="twc-row"><input class="twc-input" type="text" maxlength="30" placeholder="Add a line of text (optional)" aria-label="Text line">' +
+          '<div class="twc-row"><input class="twc-input twc-textline" type="text" maxlength="30" placeholder="Add a line of text (optional)" aria-label="Text line">' +
             '<div class="twc-swatches" data-g="ink"></div></div>' +
           '</div>' +
         '<div class="twc-actions">' +
@@ -541,7 +541,7 @@
   }
 
   /* ---------------------------------------------------------------- artwork */
-  var pad = $('.twc-pad'), range = $('.twc-range'), textIn = $('.twc-panel .twc-input');
+  var pad = $('.twc-pad'), range = $('.twc-range'), textIn = $('.twc-textline');
   function sizeLabel() {
     var lh = Math.max(200, Math.round(1600 / labelSpec.aspect));
     if (labelCanvas.width !== 1600 || labelCanvas.height !== lh) {
