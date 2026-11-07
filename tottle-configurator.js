@@ -7,6 +7,10 @@
  *   data-drawing, data-dieline (file urls), data-overcaps, data-colours, data-finishes,
  *   data-decoration (Silkscreen, Hot Stamp, Offset, Adhesive Label), data-recycled (Yes/No).
  * Every option group shows only what that tottle's CMS item allows; Decoration and Recycled hide when empty.
+ * Overcap variants live INSIDE the tottle's single GLB: name each variant's meshes with the variant, e.g.
+ * Cap_FlipTop / Cap_DiscTop / Cap_TallOvercap (any part containing "fliptop", "disctop" or "tall"). The
+ * configurator shows the chosen variant and hides the rest, and only offers variants the file contains.
+ * A file with one unnamed cap shows that cap and hides the Overcap choice.
  * Leads and shares are sent through the native Webflow form [data-twc-lead],
  * so they flow into the existing Webflow → Zapier → CRM setup.
  * Requires THREE (r147) + OrbitControls + GLTFLoader, loaded by the page loader.
@@ -75,6 +79,15 @@
   var d = mount.dataset;
   var num = function (v, fb) { var n = parseFloat(String(v || '').replace(',', '.')); return isFinite(n) && n > 0 ? n : fb; };
   var slug = function (s) { return String(s || '').trim().toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, ''); };
+  // Which overcap variant a mesh (or any of its ancestors) belongs to, from its name.
+  var CAP_PATTERNS = { 'flip-top': /flip/i, 'disc-top': /disc/i, 'tall-overcap': /tall|over/i };
+  function capVariantOf(o) {
+    for (var n = o; n && n.type !== 'Scene'; n = n.parent) {
+      var nm = (n.name || '').replace(/[^a-z]/gi, '').toLowerCase();
+      for (var k in CAP_PATTERNS) if (CAP_PATTERNS[k].test(nm)) return k;
+    }
+    return null;
+  }
   var list = function (s) { return String(s || '').split(',').map(function (x) { return x.trim(); }).filter(Boolean); };
   var esc = function (s) { return String(s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); };
   var reduceMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -501,8 +514,16 @@
     el.querySelector('button').addEventListener('click', function () { el.remove(); });
     $('.twc-stage').appendChild(el);
   }
-  function inspectModel(g, meshes, size, hasLabel, labelMesh) {
+  function inspectModel(g, meshes, size, hasLabel, labelMesh, found) {
     var issues = [], names = meshes.map(function (m) { return m.name || '(unnamed)'; });
+    var wanted = list(d.overcaps).map(slug).filter(function (k) { return CAPS[k]; });
+    if (!found.length && wanted.length > 1) issues.push('The CMS lists ' + wanted.length + ' overcaps but the file has one unnamed cap, so the Overcap choice is hidden. Include each variant in the file with its name, e.g. Cap_FlipTop, Cap_DiscTop, Cap_TallOvercap.');
+    else if (found.length) {
+      var missing = wanted.filter(function (k) { return found.indexOf(k) < 0; });
+      var extra = found.filter(function (k) { return wanted.length && wanted.indexOf(k) < 0; });
+      if (missing.length) issues.push('The CMS lists ' + missing.map(function (k) { return CAPS[k].name; }).join(', ') + ' but the file has no cap named for ' + (missing.length > 1 ? 'them' : 'it') + '; only ' + found.map(function (k) { return CAPS[k].name; }).join(', ') + ' can be offered.');
+      if (extra.length) issues.push('The file contains ' + extra.map(function (k) { return CAPS[k].name; }).join(', ') + ' which the CMS does not list for this tottle, so ' + (extra.length > 1 ? 'they are' : 'it is') + ' hidden.');
+    }
     if (!meshes.length) issues.push('The file contains no meshes.');
     if (!hasLabel) issues.push('No mesh with "label" in its name, so artwork cannot be placed. Found: ' + names.join(', ') + '.');
     if (!meshes.some(function (m) { return /cap/i.test(m.name); })) issues.push('No mesh with "cap" in its name, so the overcap colour has nothing to apply to.');
@@ -527,6 +548,22 @@
     if (!T.model) issues.push('No 3D model URL on this tottle; the generic placeholder shape is showing.');
     if (issues.length) reportModel('CMS fields', issues, true);
   }
+  var CAPS_ORDER = Object.keys(CAPS), modelVariants = [], capChoice = true;
+  function applyCapVariant(g) {
+    g.traverse(function (o) { if (o.userData.twcVariant) o.visible = o.userData.twcVariant === state.cap; });
+  }
+  // Bounding box of what is actually shown (Box3.setFromObject ignores .visible).
+  function visibleBox(root) {
+    var box = new THREE.Box3(), b = new THREE.Box3();
+    root.updateWorldMatrix(true, true);
+    root.traverse(function (o) {
+      if (!o.isMesh) return;
+      for (var n = o; n; n = n.parent) if (n.visible === false) return;
+      if (!o.geometry.boundingBox) o.geometry.computeBoundingBox();
+      b.copy(o.geometry.boundingBox).applyMatrix4(o.matrixWorld); box.union(b);
+    });
+    return box;
+  }
   function loadModelNow(url) {
     var loader = new THREE.GLTFLoader();
     if (THREE.DRACOLoader) {
@@ -535,21 +572,37 @@
       loader.setDRACOLoader(dl);
     }
     loader.load(url, function (gltf) {
-      var g = gltf.scene, hasLabel = false, autoAspect = 0, meshes = [], labelMesh = null;
+      var g = gltf.scene, hasLabel = false, autoAspect = 0, meshes = [], labelMesh = null, variants = {};
       g.traverse(function (o) {
         if (!o.isMesh) return;
         meshes.push(o);
         var n = (o.name || '').toLowerCase();
         o.castShadow = true;
         if (n.indexOf('label') > -1) { o.material = labelMat; hasLabel = true; labelMesh = o; autoAspect = ensureLabelUV(o) || autoAspect; }
-        else if (n.indexOf('cap') > -1 || n.indexOf('nozzle') > -1) o.material = capMat;
+        else if (n.indexOf('cap') > -1 || n.indexOf('nozzle') > -1) {
+          o.material = capMat;
+          var v = capVariantOf(o);
+          if (v) { (variants[v] = variants[v] || []).push(o); o.userData.twcVariant = v; }
+        }
         else o.material = bodyMat;
       });
-      var box = new THREE.Box3().setFromObject(g), size = box.getSize(new THREE.Vector3());
-      reportModel(url, inspectModel(g, meshes, size, hasLabel, labelMesh), true);
+      modelVariants = Object.keys(variants).filter(function (k) { return capKeys.indexOf(k) > -1 || !cmsCaps.length; });
+      if (modelVariants.length) {
+        // Offer only the variants this file contains (within what the CMS allows); hide the others' geometry.
+        capKeys = CAPS_ORDER.filter(function (k) { return modelVariants.indexOf(k) > -1; });
+        if (capKeys.indexOf(state.cap) < 0) state.cap = capKeys[0];
+        pills('cap', capKeys, CAPS);
+        applyCapVariant(g);
+      } else {
+        // One unnamed cap: show it as modelled and take away a choice that would change nothing.
+        var capGroup = $('[data-g="cap"]').closest('.twc-group'); if (capGroup) capGroup.hidden = true;
+        state.cap = capKeys[0]; capChoice = false; updateLabels();
+      }
+      var box = visibleBox(g), size = box.getSize(new THREE.Vector3());
+      reportModel(url, inspectModel(g, meshes, size, hasLabel, labelMesh, Object.keys(variants)), true);
       var s = (T.H * U) / (size.y || 1);
       g.scale.setScalar(s);
-      box.setFromObject(g);
+      box = visibleBox(g);
       g.position.y -= box.min.y; g.position.x -= (box.min.x + box.max.x) / 2; g.position.z -= (box.min.z + box.max.z) / 2;
       disposeGroup(parts.body); disposeGroup(parts.cap);
       product.add(g); parts.model = g;
@@ -675,7 +728,7 @@
 
   /* ---------------------------------------------------------------- state → UI */
   var specLine = function () {
-    return T.name + (T.capacity ? ' ' + T.capacity : '') + ' · ' + CAPS[state.cap].name + ' · ' + state.bodyName + ' with ' + (/^(Hex|Pantone) /.test(state.capcName) ? state.capcName : state.capcName.toLowerCase()) + ' overcap · ' + FINISHES[state.finish].name + (state.deco ? ' · ' + DECORATIONS[state.deco].name : '') + (state.resin ? ' · ' + RECYCLED[state.resin].name : '');
+    return T.name + (T.capacity ? ' ' + T.capacity : '') + (capChoice ? ' · ' + CAPS[state.cap].name : '') + ' · ' + state.bodyName + ' with ' + (/^(Hex|Pantone) /.test(state.capcName) ? state.capcName : state.capcName.toLowerCase()) + ' overcap · ' + FINISHES[state.finish].name + (state.deco ? ' · ' + DECORATIONS[state.deco].name : '') + (state.resin ? ' · ' + RECYCLED[state.resin].name : '');
   };
   function updateLabels() {
     $('[data-v="cap"]').textContent = CAPS[state.cap].name;
@@ -689,6 +742,7 @@
   var pop = 0;
   function onChange(what) {
     if (what === 'cap' && !parts.model) { buildProcedural(); sizeLabel(); drawLabel(); pop = 1; }
+    if (what === 'cap' && parts.model && modelVariants.length) { applyCapVariant(parts.model); pop = 1; }
     if (what === 'finish' || what === 'colour' || what === 'deco') applyMaterials(false);
     if (what === 'colour' || what === 'deco') drawLabel();
     updateLabels();
