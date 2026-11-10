@@ -11,8 +11,8 @@
  * legacy fallback. If none loads, the live site shows the template's "Coming soon" box; staging keeps the
  * placeholder bottle and explains the failure in the check panel.
  * Finish and Decoration show only what that tottle's CMS item allows; Decoration and Recycled hide when empty.
- * One Colour group (Bone, Stone, Charcoal + colour wheel) colours the bottle only. The cap is never recoloured:
- * it keeps the material in its GLB (or a fixed neutral when the file has none). No overcap settings anywhere.
+ * Two colour groups, each Bone, Stone, Charcoal + colour wheel: Tottle colour (bottle only) and Overcap colour (caps only).
+ * Until an overcap colour is picked the cap keeps the material in its GLB (or a fixed neutral when the file has none).
  * One GLB per tottle.
  * Leads and shares are sent through the native Webflow form [data-twc-lead],
  * so they flow into the existing Webflow → Zapier → CRM setup.
@@ -103,7 +103,7 @@
   var state = {
     cap: capKeys[0], finish: finishKeys[0], deco: decoKeys[0] || '', resin: recycledKeys[0] || '',
     body: bodyColours[0].hex, bodyName: bodyColours[0].name,
-    capMetal: false,
+    capc: '', capcName: '', capMetal: false, // capc '' = the cap keeps the colour in the model file
     text: '', ink: '#1D1D1F',
     art: { x: 0.5, y: 0.42, s: 0.5 }, txt: { x: 0.5, y: 0.8, s: 0.16 }
   };
@@ -112,7 +112,7 @@
     var m = location.hash.match(/design=([^&]+)/);
     if (m) {
       var saved = JSON.parse(decodeURIComponent(escape(atob(decodeURIComponent(m[1])))));
-      ['cap', 'finish', 'deco', 'resin', 'body', 'bodyName', 'text', 'ink', 'art', 'txt'].forEach(function (k) { if (saved[k] !== undefined) state[k] = saved[k]; });
+      ['cap', 'finish', 'deco', 'resin', 'body', 'bodyName', 'capc', 'capcName', 'text', 'ink', 'art', 'txt'].forEach(function (k) { if (saved[k] !== undefined) state[k] = saved[k]; });
       if (!CAPS[state.cap]) state.cap = capKeys[0];
       if (finishKeys.indexOf(state.finish) < 0) state.finish = finishKeys[0];
       if (decoKeys.indexOf(state.deco) < 0) state.deco = decoKeys[0] || '';
@@ -199,7 +199,8 @@
         '<button class="twc-reset" type="button">Reset view</button>' +
         '<div class="twc-hint">Drag to rotate</div></div>' +
       '<div class="twc-panel">' +
-        group('Colour', 'body', '<div class="twc-swatches" data-g="body"></div>') +
+        group('Tottle colour', 'body', '<div class="twc-swatches" data-g="body"></div>') +
+        group('Overcap colour', 'capc', '<div class="twc-swatches" data-g="capc"></div>') +
         group('Finish', 'finish', '<div class="twc-pills" data-g="finish"></div>') +
         (decoKeys.length ? group('Decoration', 'deco', '<div class="twc-pills" data-g="deco"></div>') : '') +
         (recycledKeys.length ? group('Resin', 'resin', '<div class="twc-pills" data-g="resin"></div>') : '') +
@@ -265,9 +266,9 @@
   }
   function swatches(key, cols, onPick, custom) {
     var el = $('[data-g="' + key + '"]');
-    var cur = function () { return key === 'body' ? state.body : state.ink; };
-    el.innerHTML = cols.map(function (c, i) { return '<button type="button" class="twc-sw" data-i="' + i + '" title="' + c.name + '" aria-label="' + c.name + '" aria-pressed="' + (c.hex.toLowerCase() === cur().toLowerCase()) + '" style="background:' + c.hex + '"></button>'; }).join('') +
-      (custom ? '<label class="twc-custom" title="Colour wheel"><input type="color" aria-label="Colour wheel: pick any colour or enter a hex code" value="' + cur() + '"></label>' : '');
+    var cur = function () { return key === 'body' ? state.body : key === 'capc' ? state.capc : state.ink; };
+    el.innerHTML = cols.map(function (c, i) { return '<button type="button" class="twc-sw" data-i="' + i + '" title="' + c.name + '" aria-label="' + c.name + '" aria-pressed="' + (!!cur() && c.hex.toLowerCase() === cur().toLowerCase()) + '" style="background:' + c.hex + '"></button>'; }).join('') +
+      (custom ? '<label class="twc-custom" title="Colour wheel"><input type="color" aria-label="Colour wheel: pick any colour or enter a hex code" value="' + (cur() || '#232325') + '"></label>' : '');
     el.addEventListener('click', function (e) {
       var b = e.target.closest('[data-i]'); if (!b) return;
       $$('[data-g="' + key + '"] [data-i]').forEach(function (x) { x.setAttribute('aria-pressed', x === b); });
@@ -282,6 +283,7 @@
   if (decoKeys.length) pills('deco', decoKeys, DECORATIONS);
   if (recycledKeys.length) pills('resin', recycledKeys, RECYCLED);
   swatches('body', bodyColours, function (c) { state.body = c.hex; state.bodyName = c.name; onChange('colour'); }, true);
+  swatches('capc', COLOURS, function (c) { state.capc = c.hex; state.capcName = c.name; onChange('capcolour'); }, true);
   swatches('ink', INK_COLOURS, function (c) { state.ink = c.hex; drawLabel(); }, false);
 
   /* ---------------------------------------------------------------- scene */
@@ -327,6 +329,10 @@
   // The Colour choice applies to the bottle only. A cap keeps the material its GLB supplies; when the file has
   // none (or the placeholder bottle is showing) it gets this fixed neutral.
   var CAP_FIXED = '#232325';
+  var capMeshes = [];
+  function capTarget() { return state.capc || CAP_FIXED; }
+  // A cap keeps the material in its GLB until the visitor picks an overcap colour; then every cap mesh uses capMat.
+  function applyCapMaterials() { capMeshes.forEach(function (c) { c.o.material = (state.capc || !c.own) ? capMat : c.orig; }); }
   var capMat = new THREE.MeshPhysicalMaterial({ color: lin(CAP_FIXED) });
   var ringMat = new THREE.MeshStandardMaterial({ color: 0x000000, transparent: true, opacity: 0.3 });
   var labelCanvas = document.createElement('canvas');
@@ -516,6 +522,7 @@
       loader.setDRACOLoader(dl);
     }
     loader.load(url, function (gltf) {
+      capMeshes.length = 0;
       var g = gltf.scene, hasLabel = false, autoAspect = 0, meshes = [], labelMesh = null, variants = {};
       g.traverse(function (o) {
         if (!o.isMesh) return;
@@ -524,7 +531,7 @@
         o.castShadow = true;
         if (n.indexOf('label') > -1) { o.material = labelMat; hasLabel = true; labelMesh = o; autoAspect = ensureLabelUV(o) || autoAspect; }
         else if (n.indexOf('cap') > -1 || n.indexOf('nozzle') > -1) {
-          if (!hasOwnMaterial(o)) o.material = capMat; // otherwise the cap keeps the colour the designer gave it
+          capMeshes.push({ o: o, orig: o.material, own: hasOwnMaterial(o) });
           var v = capVariantOf(o);
           if (v) { (variants[v] = variants[v] || []).push(o); o.userData.twcVariant = v; }
         }
@@ -551,7 +558,7 @@
       box = visibleBox(g);
       g.position.y -= box.min.y; g.position.x -= (box.min.x + box.max.x) / 2; g.position.z -= (box.min.z + box.max.z) / 2;
       disposeGroup(parts.body); disposeGroup(parts.cap);
-      product.add(g); parts.model = g;
+      product.add(g); parts.model = g; applyCapMaterials(); capMat.color.copy(lin(capTarget()));
       labelSpec = { aspect: T.labelW && T.labelH ? T.labelW / T.labelH : (autoAspect || 2) };
       if (!hasLabel && $('[data-art-head]')) $('[data-art-head]').textContent = 'Label area not set on this model';
       sizeLabel(); drawLabel(); frame(T.H * U); ready();
@@ -604,7 +611,7 @@
     labelMat.metalness = D.foil ? 0.6 : 0;
     labelMat.envMapIntensity = D.foil ? 0.9 : 0.35;
     bodyMat.needsUpdate = capMat.needsUpdate = labelMat.needsUpdate = true;
-    if (instant) bodyMat.color.copy(lin(state.body));
+    if (instant) { bodyMat.color.copy(lin(state.body)); capMat.color.copy(lin(capTarget())); }
   }
 
   /* ---------------------------------------------------------------- artwork */
@@ -694,7 +701,7 @@
 
   /* ---------------------------------------------------------------- state → UI */
   var specLine = function () {
-    return T.name + (T.capacity ? ' ' + T.capacity : '') + (capChoice ? ' · ' + CAPS[state.cap].name : '') + ' · ' + state.bodyName + ' · ' + FINISHES[state.finish].name + (state.deco ? ' · ' + DECORATIONS[state.deco].name : '') + (state.resin ? ' · ' + RECYCLED[state.resin].name : '');
+    return T.name + (T.capacity ? ' ' + T.capacity : '') + (capChoice ? ' · ' + CAPS[state.cap].name : '') + ' · ' + state.bodyName + (state.capc ? ' with ' + state.capcName.toLowerCase().replace(/^custom /, 'custom ') + ' overcap' : '') + ' · ' + FINISHES[state.finish].name + (state.deco ? ' · ' + DECORATIONS[state.deco].name : '') + (state.resin ? ' · ' + RECYCLED[state.resin].name : '');
   };
   function updateLabels() {
     if ($('[data-v="cap"]')) $('[data-v="cap"]').textContent = CAPS[state.cap].name;
@@ -702,12 +709,14 @@
     if (state.deco && $('[data-v="deco"]')) $('[data-v="deco"]').textContent = DECORATIONS[state.deco].name;
     if (state.resin && $('[data-v="resin"]')) $('[data-v="resin"]').textContent = RECYCLED[state.resin].name;
     $('[data-v="body"]').textContent = state.bodyName;
+    $('[data-v="capc"]').textContent = state.capc ? state.capcName : 'As designed';
     $('[data-spec]').textContent = specLine();
   }
   var pop = 0;
   function onChange(what) {
     if (what === 'cap' && !parts.model) { buildProcedural(); sizeLabel(); drawLabel(); pop = 1; }
     if (what === 'cap' && parts.model && modelVariants.length) { applyCapVariant(parts.model); pop = 1; }
+    if (what === 'capcolour') { applyCapMaterials(); applyMaterials(false); }
     if (what === 'finish' || what === 'colour' || what === 'deco') applyMaterials(false);
     if (what === 'colour' || what === 'deco') drawLabel();
     updateLabels();
@@ -733,6 +742,7 @@
     if (exporting || !visible) return;
     resize();
     bodyMat.color.lerp(lin(state.body), 0.15);
+    capMat.color.lerp(lin(capTarget()), 0.15);
     if (pop > 0) { pop = Math.max(0, pop - 0.07); var k = 1 - 0.05 * Math.sin(pop * Math.PI); product.scale.set(1 / k, k, 1 / k); }
     var idle = now - lastInteract > 4000 && !reduceMotion;
     var target = idle ? Math.sin((now - t0) / 2600) * 0.4 : product.rotation.y;
@@ -746,7 +756,7 @@
   function renderSheet() {
     exporting = true;
     var keep = { pos: camera.position.clone(), rot: product.rotation.y, aspect: camera.aspect, w: canvas.clientWidth, h: canvas.clientHeight, scale: product.scale.clone(), pr: renderer.getPixelRatio() };
-    bodyMat.color.copy(lin(state.body)); product.scale.set(1, 1, 1);
+    bodyMat.color.copy(lin(state.body)); capMat.color.copy(lin(capTarget())); product.scale.set(1, 1, 1);
     var TW = 800, TH = 1000, M = 60, sheet = document.createElement('canvas');
     sheet.width = TW * 3 + M * 4; sheet.height = TH + 300;
     var sc = sheet.getContext('2d');
@@ -783,7 +793,7 @@
 
   /* ---------------------------------------------------------------- share link */
   function designCode() {
-    var s = { cap: state.cap, finish: state.finish, body: state.body, bodyName: state.bodyName, deco: state.deco, resin: state.resin, text: state.text, ink: state.ink, art: state.art, txt: state.txt };
+    var s = { cap: state.cap, finish: state.finish, body: state.body, bodyName: state.bodyName, capc: state.capc, capcName: state.capcName, deco: state.deco, resin: state.resin, text: state.text, ink: state.ink, art: state.art, txt: state.txt };
     return encodeURIComponent(btoa(unescape(encodeURIComponent(JSON.stringify(s)))));
   }
   var designUrl = function () { return location.href.split('#')[0] + '#design=' + designCode(); };
@@ -796,7 +806,7 @@
     var isShare = fields['Lead type'] === 'Share';
     var form = (isShare && document.querySelector('form[data-twc-share]')) || document.querySelector('[data-twc-lead] form:not([data-twc-share])') || document.querySelector('form[data-twc-lead]');
     if (!form) return false;
-    var base = { 'Lead type': '', Name: '', Email: '', Company: '', Updates: '', Tottle: T.name, Design: specLine(), Colour: state.bodyName + ' (' + state.body.toUpperCase() + ')', Finish: FINISHES[state.finish].name, Decoration: state.deco ? DECORATIONS[state.deco].name : '', Resin: state.resin ? RECYCLED[state.resin].name : '', 'Design link': designUrl(), Colleagues: '', Note: '', Page: location.href.split('#')[0] };
+    var base = { 'Lead type': '', Name: '', Email: '', Company: '', Updates: '', Tottle: T.name, Design: specLine(), Colour: state.bodyName + ' (' + state.body.toUpperCase() + ')', 'Overcap colour': state.capc ? state.capcName + ' (' + state.capc.toUpperCase() + ')' : 'As designed', Finish: FINISHES[state.finish].name, Decoration: state.deco ? DECORATIONS[state.deco].name : '', Resin: state.resin ? RECYCLED[state.resin].name : '', 'Design link': designUrl(), Colleagues: '', Note: '', Page: location.href.split('#')[0] };
     Object.keys(fields).forEach(function (k) { base[k] = fields[k]; });
     Object.keys(base).forEach(function (k) {
       var el = form.querySelector('[name="' + k + '"]');
