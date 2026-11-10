@@ -4,13 +4,11 @@
  * Reads each tottle's data from data attributes bound to the CMS:
  *   data-name, data-shape, data-height, data-length, data-capacity,
  *   data-model (GLB url), data-label-h, data-label-w (mm),
- *   data-drawing, data-dieline (file urls), data-overcaps, data-colours, data-finishes,
- *   data-decoration (Silkscreen, Hot Stamp, Offset, Adhesive Label), data-recycled (Yes/No).
- * Every option group shows only what that tottle's CMS item allows; Decoration and Recycled hide when empty.
- * Overcap variants live INSIDE the tottle's single GLB: name each variant's meshes with the variant, e.g.
- * Cap_FlipTop / Cap_DiscTop / Cap_TallOvercap (any part containing "fliptop", "disctop" or "tall"). The
- * configurator shows the chosen variant and hides the rest, and only offers variants the file contains.
- * A file with one unnamed cap shows that cap and hides the Overcap choice.
+ *   data-drawing, data-dieline (file urls), data-finishes (Soft Touch, Matte, Gloss),
+ *   data-decoration (Silkscreen, Adhesive Label), data-recycled (Yes/No), data-model-fallback (second GLB URL).
+ * Finish and Decoration show only what that tottle's CMS item allows; Decoration and Recycled hide when empty.
+ * Colours are a fixed palette (Bone, Stone, Charcoal) plus a colour wheel. There is no overcap choice:
+ * each tottle is designed with its own cap and the model is shown as delivered. One GLB per tottle.
  * Leads and shares are sent through the native Webflow form [data-twc-lead],
  * so they flow into the existing Webflow → Zapier → CRM setup.
  * Requires THREE (r147) + OrbitControls + GLTFLoader, loaded by the page loader.
@@ -28,52 +26,25 @@
     'disc-top': { name: 'Disc-top', hFrac: 0.15, rFrac: 0.95, ring: 0.18 },
     'tall-overcap': { name: 'Tall overcap', hFrac: 0.34, rFrac: 1.0, ring: null }
   };
+  // Tottle Works palette (client, Nov 2026): three stock colours plus the colour wheel for anything else.
   var COLOURS = [
-    { name: 'Pure white', hex: '#F3F2EE' },
     { name: 'Bone', hex: '#E6E0D4' },
-    { name: 'Sand', hex: '#D3C3A8' },
     { name: 'Stone', hex: '#A9A59D' },
-    { name: 'Graphite', hex: '#55555A' },
     { name: 'Charcoal', hex: '#232325' }
   ];
-  var CAP_COLOURS = COLOURS.concat([{ name: 'Brushed silver', hex: '#B9BDC2', metal: true }]);
+  var CAP_COLOURS = COLOURS;
   var FINISHES = {
     gloss: { name: 'Gloss', roughness: 0.2, clearcoat: 1, ccr: 0.06 },
     matte: { name: 'Matte', roughness: 0.68, clearcoat: 0, ccr: 0.5 },
-    'soft-touch': { name: 'Soft-touch', roughness: 0.9, clearcoat: 0, ccr: 0.8 },
-    metallized: { name: 'Metallized', roughness: 0.28, clearcoat: 0.4, ccr: 0.1, metal: 1 }
+    'soft-touch': { name: 'Soft-touch', roughness: 0.9, clearcoat: 0, ccr: 0.8 }
   };
-  var FINISH_ALIAS = { 'soft-touch': 'soft-touch', 'softtouch': 'soft-touch', 'soft': 'soft-touch', 'matt': 'matte', 'glossy': 'gloss', 'metallised': 'metallized', 'metallic': 'metallized' };
+  var FINISH_ALIAS = { 'soft-touch': 'soft-touch', 'softtouch': 'soft-touch', 'soft': 'soft-touch', 'matt': 'matte', 'glossy': 'gloss' };
   var DECORATIONS = {
-    silkscreen: { name: 'Silkscreen' }, 'hot-stamp': { name: 'Hot stamp', foil: true }, offset: { name: 'Offset' }, 'adhesive-label': { name: 'Adhesive label', backing: true }
+    silkscreen: { name: 'Silkscreen' }, 'adhesive-label': { name: 'Adhesive label', backing: true }
   };
-  var DECO_ALIAS = { 'silk-screen': 'silkscreen', 'screen-print': 'silkscreen', 'hot-stamping': 'hot-stamp', 'foil': 'hot-stamp', 'hot-foil': 'hot-stamp', 'offset-print': 'offset', 'label': 'adhesive-label', 'adhesive': 'adhesive-label', 'pressure-sensitive-label': 'adhesive-label' };
+  var DECO_ALIAS = { 'silk-screen': 'silkscreen', 'screen-print': 'silkscreen', 'screen': 'silkscreen', 'label': 'adhesive-label', 'adhesive': 'adhesive-label', 'labelling': 'adhesive-label', 'pressure-sensitive-label': 'adhesive-label' };
   var RECYCLED = { virgin: { name: 'Virgin resin' }, pcr: { name: 'PCR (recycled) resin' } };
-  // Pantone references: the code is what goes to the factory; the hex is only a screen approximation
-  // (commonly published sRGB values for the Coated library). Anything not listed still records the code
-  // and the customer can add a hex for the preview.
-  var PANTONE = {
-    'black c': '2D2926', 'cool gray 1 c': 'D9D9D6', 'cool gray 3 c': 'C8C9C7', 'cool gray 5 c': 'B1B3B3', 'cool gray 7 c': '97999B', 'cool gray 9 c': '75787B', 'cool gray 11 c': '53565A',
-    'warm gray 1 c': 'D7D2CB', 'warm gray 3 c': 'BFB8AF', 'warm gray 5 c': 'ACA39A', 'warm gray 7 c': '968C83', 'warm gray 9 c': '83786F', 'warm gray 11 c': '6E6259',
-    '7527 c': 'D6D2C4', '7528 c': 'C5B9AC', '7529 c': 'B7A99A', '7530 c': 'A39382', '7531 c': '7A6855', '7499 c': 'F1E6B2', '7401 c': 'F5E1A4', '7402 c': 'ECD898',
-    '468 c': 'DDCBA4', '4685 c': 'E0C09F', '1205 c': 'F8E08E', '123 c': 'FFC72C', '186 c': 'C8102E', '485 c': 'DA291C', '1795 c': 'D22630', '2945 c': '004C97', '300 c': '005EB8',
-    '7462 c': '00558C', '548 c': '003D4C', '348 c': '00843D', '3425 c': '006341', '5747 c': '3D441E', '5807 c': 'D0D1AB', '871 c': '84754E', '877 c': '8A8D8F', '9080 c': 'EDEADB'
-  };
-  // Accepts "#D3C3A8", "D3C3A8", "PMS 7499 C", "Pantone Cool Gray 7 C", "7499". Returns {hex, name, ref} or {error}.
-  function parseColourInput(raw) {
-    var v = String(raw || '').trim();
-    if (!v) return { error: 'Enter a hex code or a Pantone reference.' };
-    var h = v.replace(/^#/, '');
-    if (/^[0-9a-f]{3}$/i.test(h)) h = h.replace(/./g, function (c) { return c + c; });
-    if (/^[0-9a-f]{6}$/i.test(h)) return { hex: '#' + h.toUpperCase(), name: 'Hex #' + h.toUpperCase(), ref: '' };
-    var key = v.toLowerCase().replace(/^(pms|pantone)\s*/, '').replace(/\s+/g, ' ').trim();
-    if (!/ (c|u|cp|tcx|tpx)$/.test(key)) key += ' c';
-    var ref = 'Pantone ' + key.toUpperCase().replace(/\b(COOL|WARM) GRAY\b/, function (m) { return m.charAt(0) + m.slice(1).toLowerCase().replace(' g', ' G'); });
-    if (PANTONE[key]) return { hex: '#' + PANTONE[key], name: ref, ref: ref, approx: true };
-    if (/^\d{2,5}( c| u| cp)?$|gray \d{1,2} c$/.test(key)) return { hex: null, name: ref, ref: ref, approx: true };
-    return { error: 'Use a hex code like #D3C3A8 or a Pantone reference like 7499 C.' };
-  }
-  var INK_COLOURS = [{ name: 'Black', hex: '#1D1D1F' }, { name: 'White', hex: '#FFFFFF' }, { name: 'Gold foil', hex: '#B8913A' }];
+  var INK_COLOURS = [{ name: 'Black', hex: '#1D1D1F' }, { name: 'White', hex: '#FFFFFF' }];
 
   /* ---------------------------------------------------------------- helpers */
   var d = mount.dataset;
@@ -99,39 +70,27 @@
     shape: slug(d.shape) || 'oval',
     H: num(d.height, 100), L: num(d.length, 40),
     capacity: (d.capacity || '').trim(),
-    model: (d.model || '').trim(),
+    model: (d.model || '').trim(), modelFallback: (d.modelFallback || '').trim(),
     labelH: num(d.labelH, 0), labelW: num(d.labelW, 0),
     drawing: (d.drawing || '').trim(), dieline: (d.dieline || '').trim()
   };
 
-  // Overcaps / colours / finishes can be narrowed per tottle from the CMS lists
-  // Overcap choice is opt-in: it exists only when the tottle's CMS item lists two or more overcaps
-  // (and, once a model is loaded, only for variants the file contains). Tottle Works' spec has no
-  // overcap option, so by default there is no Overcap group and the cap is whatever the model has.
-  var cmsCaps = list(d.overcaps).map(slug).filter(function (k) { return CAPS[k]; });
-  var capChoice = cmsCaps.length >= 2;
-  var capKeys = capChoice ? cmsCaps : [Object.keys(CAPS)[0]];
+  // Each tottle is designed with its own cap (client, Nov 2026): no overcap choice. A model's cap is shown as is;
+  // the placeholder bottle uses the first CAPS shape.
+  var capChoice = false, capKeys = [Object.keys(CAPS)[0]], cmsCaps = [];
+  // Finish and Decoration can be narrowed per tottle from the CMS lists; colours are the fixed palette + wheel.
   var finishKeys = Object.keys(FINISHES);
   var cmsFin = list(d.finishes).map(function (n) { var k = slug(n); return FINISHES[k] ? k : FINISH_ALIAS[k]; }).filter(Boolean);
   if (cmsFin.length) finishKeys = cmsFin.filter(function (k, i, a) { return a.indexOf(k) === i; });
-  // Colour options (Henry's spec): "Hex#", "Pantone", "Metallized" say which custom entries this tottle allows.
-  // Any palette names in the same list narrow the swatches.
-  var cmsColRaw = list(d.colours), cmsColSlugs = cmsColRaw.map(slug);
-  var allowHex = !cmsColRaw.length || cmsColSlugs.some(function (k) { return /^hex/.test(k); });
-  var allowPantone = !cmsColRaw.length || cmsColSlugs.some(function (k) { return /^(pantone|pms)/.test(k); });
-  var allowMetal = !cmsColRaw.length || cmsColSlugs.some(function (k) { return /^metal/.test(k); });
-  if (!allowMetal) { CAP_COLOURS = CAP_COLOURS.filter(function (c) { return !c.metal; }); finishKeys = finishKeys.filter(function (k) { return k !== 'metallized'; }) || finishKeys; }
   if (!finishKeys.length) finishKeys = ['gloss'];
   var bodyColours = COLOURS;
-  var cmsCol = cmsColRaw.map(function (n) { return COLOURS.filter(function (c) { return slug(c.name) === slug(n); })[0]; }).filter(Boolean);
-  if (cmsCol.length) bodyColours = cmsCol;
   var decoKeys = list(d.decoration).map(function (n) { var k = slug(n); return DECORATIONS[k] ? k : DECO_ALIAS[k]; }).filter(function (k, i, a) { return k && a.indexOf(k) === i; });
   var recycledKeys = /^(yes|true|y|1|pcr)/i.test(String(d.recycled || '').trim()) ? ['virgin', 'pcr'] : [];
 
   var state = {
     cap: capKeys[0], finish: finishKeys[0], deco: decoKeys[0] || '', resin: recycledKeys[0] || '',
     body: bodyColours[0].hex, bodyName: bodyColours[0].name,
-    capc: '#232325', capcName: 'Charcoal', capMetal: false, bodyRef: '', capcRef: '',
+    capc: '#232325', capcName: 'Charcoal', capMetal: false,
     text: '', ink: '#1D1D1F',
     art: { x: 0.5, y: 0.42, s: 0.5 }, txt: { x: 0.5, y: 0.8, s: 0.16 }
   };
@@ -140,7 +99,7 @@
     var m = location.hash.match(/design=([^&]+)/);
     if (m) {
       var saved = JSON.parse(decodeURIComponent(escape(atob(decodeURIComponent(m[1])))));
-      ['cap', 'finish', 'deco', 'resin', 'body', 'bodyName', 'bodyRef', 'capc', 'capcName', 'capcRef', 'capMetal', 'text', 'ink', 'art', 'txt'].forEach(function (k) { if (saved[k] !== undefined) state[k] = saved[k]; });
+      ['cap', 'finish', 'deco', 'resin', 'body', 'bodyName', 'capc', 'capcName', 'capMetal', 'text', 'ink', 'art', 'txt'].forEach(function (k) { if (saved[k] !== undefined) state[k] = saved[k]; });
       if (!CAPS[state.cap]) state.cap = capKeys[0];
       if (finishKeys.indexOf(state.finish) < 0) state.finish = finishKeys[0];
       if (decoKeys.indexOf(state.deco) < 0) state.deco = decoKeys[0] || '';
@@ -188,8 +147,6 @@
     '.twc-btn:hover{background:#fbfbfb;color:#222}' +
     '.twc-btn.is-ghost{background:transparent;color:#222}' +
     '.twc-btn.is-ghost:hover{background:#222;color:#fbfbfb}' +
-    '.twc-code{margin-top:12px}.twc-code summary{cursor:pointer;list-style:none;font-family:"IBM Plex Sans",sans-serif;font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:var(--ink);text-decoration:underline;text-decoration-color:rgba(34,34,34,.3);text-underline-offset:5px;padding:4px 0;display:inline-block}.twc-code summary::-webkit-details-marker{display:none}.twc-code[open] summary{text-decoration-color:var(--ink)}' +
-    '.twc-code-row{display:flex;gap:8px;margin-top:10px}.twc-code-row .twc-input{flex:1;min-width:0;text-transform:uppercase}.twc-code-row .twc-input::placeholder{text-transform:none}.twc-code-row .twc-btn{width:auto;padding:0 18px;min-height:0}.twc-code .twc-msg{margin-top:8px}' +
     '.twc-spec{font-size:13px;line-height:1.5;color:var(--ink2);margin:0 0 4px}' +
     '.twc-note{font-size:12px;color:var(--muted);margin:0}' +
     '.twc-modal{position:fixed;inset:0;z-index:1000;display:none;align-items:center;justify-content:center;padding:max(16px,env(safe-area-inset-top)) max(16px,env(safe-area-inset-right)) max(16px,env(safe-area-inset-bottom)) max(16px,env(safe-area-inset-left));background:rgba(20,20,20,.45)}' +
@@ -227,11 +184,10 @@
       '<div class="twc-stage"><canvas aria-label="3D preview of your ' + esc(T.name) + ' tottle. Drag to rotate, scroll or pinch to zoom." tabindex="0"></canvas>' +
         '<div class="twc-loading">Preparing your tottle</div>' +
         '<button class="twc-reset" type="button">Reset view</button>' +
-        '<div class="twc-hint">Drag to rotate · Scroll to zoom</div></div>' +
+        '<div class="twc-hint">Drag to rotate</div></div>' +
       '<div class="twc-panel">' +
-        (capChoice ? group('Overcap', 'cap', '<div class="twc-pills" data-g="cap"></div>') : '') +
-        group('Tottle colour', 'body', '<div class="twc-swatches" data-g="body"></div>' + codeRow('body')) +
-        group('Overcap colour', 'capc', '<div class="twc-swatches" data-g="capc"></div>' + codeRow('capc')) +
+        group('Tottle colour', 'body', '<div class="twc-swatches" data-g="body"></div>') +
+        group('Overcap colour', 'capc', '<div class="twc-swatches" data-g="capc"></div>') +
         group('Finish', 'finish', '<div class="twc-pills" data-g="finish"></div>') +
         (decoKeys.length ? group('Decoration', 'deco', '<div class="twc-pills" data-g="deco"></div>') : '') +
         (recycledKeys.length ? group('Resin', 'resin', '<div class="twc-pills" data-g="resin"></div>') : '') +
@@ -275,15 +231,6 @@
         '<div class="twc-end"><button class="twc-link" type="button" data-copy>Copy link</button><button class="twc-btn" type="submit" style="width:auto;padding:14px 22px">Send</button></div>' +
       '</form>');
 
-  function codeRow(key) {
-    if (!allowHex && !allowPantone) return '';
-    var what = allowHex && allowPantone ? 'a hex or Pantone reference' : allowHex ? 'a hex code' : 'a Pantone reference';
-    var ph = allowHex && allowPantone ? '#D3C3A8 or PMS 7499 C' : allowHex ? '#D3C3A8' : 'PMS 7499 C';
-    return '<details class="twc-code" data-code="' + key + '"><summary>Enter ' + what + '</summary>' +
-      '<div class="twc-code-row"><input class="twc-input" type="text" inputmode="text" autocomplete="off" spellcheck="false" maxlength="24" placeholder="' + ph + '" aria-label="Enter ' + what + '">' +
-      '<button type="button" class="twc-btn is-ghost twc-code-apply">Apply</button></div>' +
-      '<p class="twc-msg" aria-live="polite"></p></details>';
-  }
   function group(label, key, inner) {
     return '<div class="twc-group"><div class="twc-head"><span class="twc-label">' + label + '</span><span class="twc-value" data-v="' + key + '"></span></div>' + inner + '</div>';
   }
@@ -308,7 +255,7 @@
     var el = $('[data-g="' + key + '"]');
     var cur = function () { return key === 'body' ? state.body : key === 'capc' ? state.capc : state.ink; };
     el.innerHTML = cols.map(function (c, i) { return '<button type="button" class="twc-sw" data-i="' + i + '" title="' + c.name + '" aria-label="' + c.name + '" aria-pressed="' + (c.hex.toLowerCase() === cur().toLowerCase()) + '" style="background:' + c.hex + '"></button>'; }).join('') +
-      (custom ? '<label class="twc-custom" title="Custom colour"><input type="color" aria-label="Custom colour" value="' + cur() + '"></label>' : '');
+      (custom ? '<label class="twc-custom" title="Colour wheel"><input type="color" aria-label="Colour wheel: pick any colour or enter a hex code" value="' + cur() + '"></label>' : '');
     el.addEventListener('click', function (e) {
       var b = e.target.closest('[data-i]'); if (!b) return;
       $$('[data-g="' + key + '"] [data-i]').forEach(function (x) { x.setAttribute('aria-pressed', x === b); });
@@ -319,36 +266,12 @@
       onPick({ name: 'Custom ' + e.target.value.toUpperCase(), hex: e.target.value });
     });
   }
-  if (capChoice) pills('cap', capKeys, CAPS);
   pills('finish', finishKeys, FINISHES);
   if (decoKeys.length) pills('deco', decoKeys, DECORATIONS);
   if (recycledKeys.length) pills('resin', recycledKeys, RECYCLED);
-  swatches('body', bodyColours, function (c) { state.body = c.hex; state.bodyName = c.name; onChange('colour'); }, allowHex);
-  swatches('capc', CAP_COLOURS, function (c) { state.capc = c.hex; state.capcName = c.name; state.capMetal = !!c.metal; onChange('colour'); }, allowHex);
+  swatches('body', bodyColours, function (c) { state.body = c.hex; state.bodyName = c.name; onChange('colour'); }, true);
+  swatches('capc', CAP_COLOURS, function (c) { state.capc = c.hex; state.capcName = c.name; state.capMetal = false; onChange('colour'); }, true);
   swatches('ink', INK_COLOURS, function (c) { state.ink = c.hex; drawLabel(); }, false);
-  function codeInput(key) {
-    var box = $('[data-code="' + key + '"]'); if (!box) return;
-    var input = box.querySelector('input'), msg = box.querySelector('.twc-msg');
-    var apply = function () {
-      var r = parseColourInput(input.value);
-      if (!r.error && r.ref && !allowPantone) r = { error: 'This tottle is quoted by hex colour only. Enter a hex code like #D3C3A8.' };
-      if (!r.error && !r.ref && !allowHex) r = { error: 'This tottle is quoted by Pantone reference. Enter one like PMS 7499 C.' };
-      msg.classList.toggle('is-err', !!r.error);
-      if (r.error) { msg.textContent = r.error; return; }
-      $$('[data-g="' + key + '"] [data-i]').forEach(function (x) { x.setAttribute('aria-pressed', 'false'); });
-      if (key === 'body') { if (r.hex) state.body = r.hex; state.bodyName = r.name; state.bodyRef = r.ref; }
-      else { if (r.hex) state.capc = r.hex; state.capcName = r.name; state.capcRef = r.ref; state.capMetal = false; }
-      msg.textContent = r.hex ? (r.approx ? r.ref + ' recorded. The on-screen colour is an approximation; your Pantone reference is what we quote against.' : r.name + ' applied.')
-        : r.ref + ' recorded for your quote. Add a hex code too if you would like to preview it on screen.';
-      onChange('colour');
-    };
-    box.querySelector('.twc-code-apply').addEventListener('click', apply);
-    input.addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); apply(); } });
-    // picking a swatch clears the typed reference
-    $('[data-g="' + key + '"]').addEventListener('click', function (e) { if (e.target.closest('[data-i]')) { state[key + 'Ref'] = ''; msg.textContent = ''; input.value = ''; } });
-    if (state[key + 'Ref']) { input.value = state[key + 'Ref'].replace(/^Pantone /, ''); box.open = true; }
-  }
-  codeInput('body'); codeInput('capc');
 
   /* ---------------------------------------------------------------- scene */
   var canvas = $('.twc-stage canvas');
@@ -545,9 +468,8 @@
   function inspectCms() {
     var issues = [];
     if (!list(d.finishes).length) issues.push('Finish options are not set for this tottle; all finishes are being offered.');
-    else if (list(d.finishes).length !== finishKeys.length) issues.push('Some finish options were not recognised: ' + list(d.finishes).filter(function (n) { var k = slug(n); return !(FINISHES[k] || FINISH_ALIAS[k]); }).join(', ') + '. Use Soft Touch, Matte, Gloss or Metallized.');
-    if (!list(d.colours).length) issues.push('Colour options are not set for this tottle; hex, Pantone and metallized are all being offered.');
-    if (list(d.decoration).length && list(d.decoration).length !== decoKeys.length) issues.push('Some decoration methods were not recognised: ' + list(d.decoration).filter(function (n) { var k = slug(n); return !(DECORATIONS[k] || DECO_ALIAS[k]); }).join(', ') + '. Use Silkscreen, Hot Stamp, Offset or Adhesive Label.');
+    else if (list(d.finishes).length !== finishKeys.length) issues.push('Some finish options were not recognised: ' + list(d.finishes).filter(function (n) { var k = slug(n); return !(FINISHES[k] || FINISH_ALIAS[k]); }).join(', ') + '. Use Soft Touch, Matte or Gloss.');
+    if (list(d.decoration).length && list(d.decoration).length !== decoKeys.length) issues.push('Some decoration methods were not recognised: ' + list(d.decoration).filter(function (n) { var k = slug(n); return !(DECORATIONS[k] || DECO_ALIAS[k]); }).join(', ') + '. Use Silkscreen or Adhesive Label.');
     if (!T.model) issues.push('No 3D model URL on this tottle; the generic placeholder shape is showing.');
     if (issues.length) reportModel('CMS fields', issues, true);
   }
@@ -615,6 +537,10 @@
       if (!hasLabel && $('[data-art-head]')) $('[data-art-head]').textContent = 'Label area not set on this model';
       sizeLabel(); drawLabel(); frame(T.H * U); ready();
     }, undefined, function (err) {
+      if (T.modelFallback && url !== T.modelFallback) {
+        console.warn('[Tottle configurator] primary model failed, trying fallback', url);
+        return loadModelNow(T.modelFallback);
+      }
       reportModel(url, ['The model could not be loaded' + (err && err.message ? ' (' + err.message + ')' : '') + '. Check the URL opens in a browser tab, that the host allows cross-origin loading (CORS), and that the file is a .glb.'], false);
       buildProcedural(); sizeLabel(); drawLabel(); ready();
     });
@@ -626,7 +552,7 @@
     TARGET.set(0, H * 0.5, 0);
     HOME.set(0, H * 0.62, dist);
     camera.position.copy(HOME); controls.target.copy(TARGET);
-    controls.minDistance = dist * 0.55; controls.maxDistance = dist * 1.6;
+    controls.minDistance = controls.maxDistance = dist; controls.enableZoom = false;
     var b = H * 1.4;
     Object.assign(key.shadow.camera, { left: -b, right: b, top: b, bottom: -b, near: 0.5, far: 40 });
     key.shadow.camera.updateProjectionMatrix();
@@ -755,7 +681,6 @@
 
   /* ---------------------------------------------------------------- render loop */
   var lastInteract = -1e9, t0 = performance.now(), exporting = false, visible = true, hint = $('.twc-hint');
-  if (window.matchMedia && matchMedia('(hover:none)').matches) hint.textContent = 'Drag to rotate · Pinch to zoom';
   (function (r) { if (d.stickyTop) r.style.setProperty('--twc-top', parseFloat(d.stickyTop) + 'px'); if (d.stickyTopM) r.style.setProperty('--twc-top-m', parseFloat(d.stickyTopM) + 'px'); })($('.twc'));
   controls.addEventListener('start', function () { lastInteract = performance.now(); hint.style.opacity = 0; });
   controls.addEventListener('change', function () { lastInteract = performance.now(); });
@@ -825,7 +750,7 @@
 
   /* ---------------------------------------------------------------- share link */
   function designCode() {
-    var s = { cap: state.cap, finish: state.finish, body: state.body, bodyName: state.bodyName, capc: state.capc, capcName: state.capcName, capMetal: state.capMetal, bodyRef: state.bodyRef, capcRef: state.capcRef, deco: state.deco, resin: state.resin, text: state.text, ink: state.ink, art: state.art, txt: state.txt };
+    var s = { cap: state.cap, finish: state.finish, body: state.body, bodyName: state.bodyName, capc: state.capc, capcName: state.capcName, capMetal: state.capMetal, deco: state.deco, resin: state.resin, text: state.text, ink: state.ink, art: state.art, txt: state.txt };
     return encodeURIComponent(btoa(unescape(encodeURIComponent(JSON.stringify(s)))));
   }
   var designUrl = function () { return location.href.split('#')[0] + '#design=' + designCode(); };
