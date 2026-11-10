@@ -7,8 +7,8 @@
  *   data-drawing, data-dieline (file urls), data-finishes (Soft Touch, Matte, Gloss),
  *   data-decoration (Silkscreen, Adhesive Label), data-recycled (Yes/No), data-model-fallback (second GLB URL).
  * Finish and Decoration show only what that tottle's CMS item allows; Decoration and Recycled hide when empty.
- * Colours are a fixed palette (Bone, Stone, Charcoal) plus a colour wheel. There is no overcap choice:
- * each tottle is designed with its own cap and the model is shown as delivered. One GLB per tottle.
+ * One Colour group (Bone, Stone, Charcoal + colour wheel) colours the whole tottle, cap included. There are no
+ * overcap settings: each tottle is designed with its own cap and the model is shown as delivered. One GLB per tottle.
  * Leads and shares are sent through the native Webflow form [data-twc-lead],
  * so they flow into the existing Webflow → Zapier → CRM setup.
  * Requires THREE (r147) + OrbitControls + GLTFLoader, loaded by the page loader.
@@ -32,7 +32,6 @@
     { name: 'Stone', hex: '#A9A59D' },
     { name: 'Charcoal', hex: '#232325' }
   ];
-  var CAP_COLOURS = COLOURS;
   var FINISHES = {
     gloss: { name: 'Gloss', roughness: 0.2, clearcoat: 1, ccr: 0.06 },
     matte: { name: 'Matte', roughness: 0.68, clearcoat: 0, ccr: 0.5 },
@@ -90,7 +89,7 @@
   var state = {
     cap: capKeys[0], finish: finishKeys[0], deco: decoKeys[0] || '', resin: recycledKeys[0] || '',
     body: bodyColours[0].hex, bodyName: bodyColours[0].name,
-    capc: '#232325', capcName: 'Charcoal', capMetal: false,
+    capMetal: false,
     text: '', ink: '#1D1D1F',
     art: { x: 0.5, y: 0.42, s: 0.5 }, txt: { x: 0.5, y: 0.8, s: 0.16 }
   };
@@ -99,7 +98,7 @@
     var m = location.hash.match(/design=([^&]+)/);
     if (m) {
       var saved = JSON.parse(decodeURIComponent(escape(atob(decodeURIComponent(m[1])))));
-      ['cap', 'finish', 'deco', 'resin', 'body', 'bodyName', 'capc', 'capcName', 'capMetal', 'text', 'ink', 'art', 'txt'].forEach(function (k) { if (saved[k] !== undefined) state[k] = saved[k]; });
+      ['cap', 'finish', 'deco', 'resin', 'body', 'bodyName', 'text', 'ink', 'art', 'txt'].forEach(function (k) { if (saved[k] !== undefined) state[k] = saved[k]; });
       if (!CAPS[state.cap]) state.cap = capKeys[0];
       if (finishKeys.indexOf(state.finish) < 0) state.finish = finishKeys[0];
       if (decoKeys.indexOf(state.deco) < 0) state.deco = decoKeys[0] || '';
@@ -186,8 +185,7 @@
         '<button class="twc-reset" type="button">Reset view</button>' +
         '<div class="twc-hint">Drag to rotate</div></div>' +
       '<div class="twc-panel">' +
-        group('Tottle colour', 'body', '<div class="twc-swatches" data-g="body"></div>') +
-        group('Overcap colour', 'capc', '<div class="twc-swatches" data-g="capc"></div>') +
+        group('Colour', 'body', '<div class="twc-swatches" data-g="body"></div>') +
         group('Finish', 'finish', '<div class="twc-pills" data-g="finish"></div>') +
         (decoKeys.length ? group('Decoration', 'deco', '<div class="twc-pills" data-g="deco"></div>') : '') +
         (recycledKeys.length ? group('Resin', 'resin', '<div class="twc-pills" data-g="resin"></div>') : '') +
@@ -253,7 +251,7 @@
   }
   function swatches(key, cols, onPick, custom) {
     var el = $('[data-g="' + key + '"]');
-    var cur = function () { return key === 'body' ? state.body : key === 'capc' ? state.capc : state.ink; };
+    var cur = function () { return key === 'body' ? state.body : state.ink; };
     el.innerHTML = cols.map(function (c, i) { return '<button type="button" class="twc-sw" data-i="' + i + '" title="' + c.name + '" aria-label="' + c.name + '" aria-pressed="' + (c.hex.toLowerCase() === cur().toLowerCase()) + '" style="background:' + c.hex + '"></button>'; }).join('') +
       (custom ? '<label class="twc-custom" title="Colour wheel"><input type="color" aria-label="Colour wheel: pick any colour or enter a hex code" value="' + cur() + '"></label>' : '');
     el.addEventListener('click', function (e) {
@@ -270,7 +268,6 @@
   if (decoKeys.length) pills('deco', decoKeys, DECORATIONS);
   if (recycledKeys.length) pills('resin', recycledKeys, RECYCLED);
   swatches('body', bodyColours, function (c) { state.body = c.hex; state.bodyName = c.name; onChange('colour'); }, true);
-  swatches('capc', CAP_COLOURS, function (c) { state.capc = c.hex; state.capcName = c.name; state.capMetal = false; onChange('colour'); }, true);
   swatches('ink', INK_COLOURS, function (c) { state.ink = c.hex; drawLabel(); }, false);
 
   /* ---------------------------------------------------------------- scene */
@@ -313,7 +310,7 @@
 
   var lin = function (hex) { return new THREE.Color(hex).convertSRGBToLinear(); };
   var bodyMat = new THREE.MeshPhysicalMaterial({ color: lin(state.body) });
-  var capMat = new THREE.MeshPhysicalMaterial({ color: lin(state.capc) });
+  var capMat = new THREE.MeshPhysicalMaterial({ color: lin(state.body) }); // cap takes the tottle colour
   var ringMat = new THREE.MeshStandardMaterial({ color: 0x000000, transparent: true, opacity: 0.3 });
   var labelCanvas = document.createElement('canvas');
   var labelTex = new THREE.CanvasTexture(labelCanvas);
@@ -569,7 +566,7 @@
     labelMat.metalness = D.foil ? 0.6 : 0;
     labelMat.envMapIntensity = D.foil ? 0.9 : 0.35;
     bodyMat.needsUpdate = capMat.needsUpdate = labelMat.needsUpdate = true;
-    if (instant) { bodyMat.color.copy(lin(state.body)); capMat.color.copy(lin(state.capc)); }
+    if (instant) { bodyMat.color.copy(lin(state.body)); capMat.color.copy(lin(state.body)); }
   }
 
   /* ---------------------------------------------------------------- artwork */
@@ -659,7 +656,7 @@
 
   /* ---------------------------------------------------------------- state → UI */
   var specLine = function () {
-    return T.name + (T.capacity ? ' ' + T.capacity : '') + (capChoice ? ' · ' + CAPS[state.cap].name : '') + ' · ' + state.bodyName + ' with ' + (/^(Hex|Pantone) /.test(state.capcName) ? state.capcName : state.capcName.toLowerCase()) + ' overcap · ' + FINISHES[state.finish].name + (state.deco ? ' · ' + DECORATIONS[state.deco].name : '') + (state.resin ? ' · ' + RECYCLED[state.resin].name : '');
+    return T.name + (T.capacity ? ' ' + T.capacity : '') + (capChoice ? ' · ' + CAPS[state.cap].name : '') + ' · ' + state.bodyName + ' · ' + FINISHES[state.finish].name + (state.deco ? ' · ' + DECORATIONS[state.deco].name : '') + (state.resin ? ' · ' + RECYCLED[state.resin].name : '');
   };
   function updateLabels() {
     if ($('[data-v="cap"]')) $('[data-v="cap"]').textContent = CAPS[state.cap].name;
@@ -667,7 +664,6 @@
     if (state.deco && $('[data-v="deco"]')) $('[data-v="deco"]').textContent = DECORATIONS[state.deco].name;
     if (state.resin && $('[data-v="resin"]')) $('[data-v="resin"]').textContent = RECYCLED[state.resin].name;
     $('[data-v="body"]').textContent = state.bodyName;
-    $('[data-v="capc"]').textContent = state.capcName;
     $('[data-spec]').textContent = specLine();
   }
   var pop = 0;
@@ -699,7 +695,7 @@
     if (exporting || !visible) return;
     resize();
     bodyMat.color.lerp(lin(state.body), 0.15);
-    capMat.color.lerp(lin(state.capc), 0.15);
+    capMat.color.lerp(lin(state.body), 0.15);
     if (pop > 0) { pop = Math.max(0, pop - 0.07); var k = 1 - 0.05 * Math.sin(pop * Math.PI); product.scale.set(1 / k, k, 1 / k); }
     var idle = now - lastInteract > 4000 && !reduceMotion;
     var target = idle ? Math.sin((now - t0) / 2600) * 0.4 : product.rotation.y;
@@ -713,7 +709,7 @@
   function renderSheet() {
     exporting = true;
     var keep = { pos: camera.position.clone(), rot: product.rotation.y, aspect: camera.aspect, w: canvas.clientWidth, h: canvas.clientHeight, scale: product.scale.clone(), pr: renderer.getPixelRatio() };
-    bodyMat.color.copy(lin(state.body)); capMat.color.copy(lin(state.capc)); product.scale.set(1, 1, 1);
+    bodyMat.color.copy(lin(state.body)); capMat.color.copy(lin(state.body)); product.scale.set(1, 1, 1);
     var TW = 800, TH = 1000, M = 60, sheet = document.createElement('canvas');
     sheet.width = TW * 3 + M * 4; sheet.height = TH + 300;
     var sc = sheet.getContext('2d');
@@ -750,7 +746,7 @@
 
   /* ---------------------------------------------------------------- share link */
   function designCode() {
-    var s = { cap: state.cap, finish: state.finish, body: state.body, bodyName: state.bodyName, capc: state.capc, capcName: state.capcName, capMetal: state.capMetal, deco: state.deco, resin: state.resin, text: state.text, ink: state.ink, art: state.art, txt: state.txt };
+    var s = { cap: state.cap, finish: state.finish, body: state.body, bodyName: state.bodyName, deco: state.deco, resin: state.resin, text: state.text, ink: state.ink, art: state.art, txt: state.txt };
     return encodeURIComponent(btoa(unescape(encodeURIComponent(JSON.stringify(s)))));
   }
   var designUrl = function () { return location.href.split('#')[0] + '#design=' + designCode(); };
@@ -759,7 +755,7 @@
   function sendLead(fields) {
     var form = document.querySelector('[data-twc-lead] form') || document.querySelector('form[data-twc-lead]');
     if (!form) return false;
-    var base = { 'Lead type': '', Name: '', Email: '', Company: '', Updates: '', Tottle: T.name, Design: specLine(), 'Tottle colour': state.bodyName + ' (' + state.body.toUpperCase() + ')', 'Overcap colour': state.capcName + ' (' + state.capc.toUpperCase() + ')', Finish: FINISHES[state.finish].name, Decoration: state.deco ? DECORATIONS[state.deco].name : '', Resin: state.resin ? RECYCLED[state.resin].name : '', 'Design link': designUrl(), Colleagues: '', Note: '', Page: location.href.split('#')[0] };
+    var base = { 'Lead type': '', Name: '', Email: '', Company: '', Updates: '', Tottle: T.name, Design: specLine(), Colour: state.bodyName + ' (' + state.body.toUpperCase() + ')', Finish: FINISHES[state.finish].name, Decoration: state.deco ? DECORATIONS[state.deco].name : '', Resin: state.resin ? RECYCLED[state.resin].name : '', 'Design link': designUrl(), Colleagues: '', Note: '', Page: location.href.split('#')[0] };
     Object.keys(fields).forEach(function (k) { base[k] = fields[k]; });
     Object.keys(base).forEach(function (k) {
       var el = form.querySelector('[name="' + k + '"]');
