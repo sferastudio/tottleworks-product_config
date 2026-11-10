@@ -11,7 +11,8 @@
  * legacy fallback. If none loads, the live site shows the template's "Coming soon" box; staging keeps the
  * placeholder bottle and explains the failure in the check panel.
  * Finish and Decoration show only what that tottle's CMS item allows; Decoration and Recycled hide when empty.
- * Two colour groups, each Bone, Stone, Charcoal + colour wheel: Tottle colour (bottle only) and Overcap colour (caps only).
+ * Two colour groups, each with a colour wheel: Tottle color (Bone, Stone, Charcoal; bottle only) and Overcap color
+ * (White, Black, Silver, Gold, Rose gold; caps only).
  * Until an overcap colour is picked the cap keeps the material in its GLB (or a fixed neutral when the file has none).
  * One GLB per tottle.
  * Leads and shares are sent through the native Webflow form [data-twc-lead],
@@ -97,6 +98,14 @@
   if (cmsFin.length) finishKeys = cmsFin.filter(function (k, i, a) { return a.indexOf(k) === i; });
   if (!finishKeys.length) finishKeys = ['gloss'];
   var bodyColours = COLOURS;
+  // Usual overcap colours (shown on the Overcap color group, plus the colour wheel). metal = shiny metallised cap.
+  var CAP_COLOURS = [
+    { name: 'White', hex: '#F4F2EE' },
+    { name: 'Black', hex: '#1D1D1F' },
+    { name: 'Silver', hex: '#C3C5C8', metal: true },
+    { name: 'Gold', hex: '#C9A55C', metal: true },
+    { name: 'Rose gold', hex: '#B9777F', metal: true }
+  ];
   var decoKeys = list(d.decoration).map(function (n) { var k = slug(n); return DECORATIONS[k] ? k : DECO_ALIAS[k]; }).filter(function (k, i, a) { return k && a.indexOf(k) === i; });
   var recycledKeys = /^(yes|true|y|1|pcr)/i.test(String(d.recycled || '').trim()) ? ['virgin', 'pcr'] : [];
 
@@ -112,7 +121,7 @@
     var m = location.hash.match(/design=([^&]+)/);
     if (m) {
       var saved = JSON.parse(decodeURIComponent(escape(atob(decodeURIComponent(m[1])))));
-      ['cap', 'finish', 'deco', 'resin', 'body', 'bodyName', 'capc', 'capcName', 'text', 'ink', 'art', 'txt'].forEach(function (k) { if (saved[k] !== undefined) state[k] = saved[k]; });
+      ['cap', 'finish', 'deco', 'resin', 'body', 'bodyName', 'capc', 'capcName', 'capMetal', 'text', 'ink', 'art', 'txt'].forEach(function (k) { if (saved[k] !== undefined) state[k] = saved[k]; });
       if (!CAPS[state.cap]) state.cap = capKeys[0];
       if (finishKeys.indexOf(state.finish) < 0) state.finish = finishKeys[0];
       if (decoKeys.indexOf(state.deco) < 0) state.deco = decoKeys[0] || '';
@@ -199,8 +208,8 @@
         '<button class="twc-reset" type="button">Reset view</button>' +
         '<div class="twc-hint">Drag to rotate</div></div>' +
       '<div class="twc-panel">' +
-        group('Tottle colour', 'body', '<div class="twc-swatches" data-g="body"></div>') +
-        group('Overcap colour', 'capc', '<div class="twc-swatches" data-g="capc"></div>') +
+        group('Tottle color', 'body', '<div class="twc-swatches" data-g="body"></div>') +
+        group('Overcap color', 'capc', '<div class="twc-swatches" data-g="capc"></div>') +
         group('Finish', 'finish', '<div class="twc-pills" data-g="finish"></div>') +
         (decoKeys.length ? group('Decoration', 'deco', '<div class="twc-pills" data-g="deco"></div>') : '') +
         (recycledKeys.length ? group('Resin', 'resin', '<div class="twc-pills" data-g="resin"></div>') : '') +
@@ -283,7 +292,7 @@
   if (decoKeys.length) pills('deco', decoKeys, DECORATIONS);
   if (recycledKeys.length) pills('resin', recycledKeys, RECYCLED);
   swatches('body', bodyColours, function (c) { state.body = c.hex; state.bodyName = c.name; onChange('colour'); }, true);
-  swatches('capc', COLOURS, function (c) { state.capc = c.hex; state.capcName = c.name; onChange('capcolour'); }, true);
+  swatches('capc', CAP_COLOURS, function (c) { state.capc = c.hex; state.capcName = c.name; state.capMetal = !!c.metal; onChange('capcolour'); }, true);
   swatches('ink', INK_COLOURS, function (c) { state.ink = c.hex; drawLabel(); }, false);
 
   /* ---------------------------------------------------------------- scene */
@@ -793,7 +802,7 @@
 
   /* ---------------------------------------------------------------- share link */
   function designCode() {
-    var s = { cap: state.cap, finish: state.finish, body: state.body, bodyName: state.bodyName, capc: state.capc, capcName: state.capcName, deco: state.deco, resin: state.resin, text: state.text, ink: state.ink, art: state.art, txt: state.txt };
+    var s = { cap: state.cap, finish: state.finish, body: state.body, bodyName: state.bodyName, capc: state.capc, capcName: state.capcName, capMetal: state.capMetal, deco: state.deco, resin: state.resin, text: state.text, ink: state.ink, art: state.art, txt: state.txt };
     return encodeURIComponent(btoa(unescape(encodeURIComponent(JSON.stringify(s)))));
   }
   var designUrl = function () { return location.href.split('#')[0] + '#design=' + designCode(); };
