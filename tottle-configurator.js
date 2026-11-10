@@ -761,7 +761,11 @@
 
   /* ---------------------------------------------------------------- leads (native Webflow form → Zapier → CRM) */
   function sendLead(fields) {
-    var form = document.querySelector('[data-twc-lead] form') || document.querySelector('form[data-twc-lead]');
+    // Two native Webflow forms live in the hidden [data-twc-lead] wrapper:
+    //   "Configurator Lead"  (data-twc-lead form, first)  → Download leads
+    //   "Configurator Share" (form[data-twc-share])        → Share leads (separate Zap emails the colleagues)
+    var isShare = fields['Lead type'] === 'Share';
+    var form = (isShare && document.querySelector('form[data-twc-share]')) || document.querySelector('[data-twc-lead] form:not([data-twc-share])') || document.querySelector('form[data-twc-lead]');
     if (!form) return false;
     var base = { 'Lead type': '', Name: '', Email: '', Company: '', Updates: '', Tottle: T.name, Design: specLine(), Colour: state.bodyName + ' (' + state.body.toUpperCase() + ')', Finish: FINISHES[state.finish].name, Decoration: state.deco ? DECORATIONS[state.deco].name : '', Resin: state.resin ? RECYCLED[state.resin].name : '', 'Design link': designUrl(), Colleagues: '', Note: '', Page: location.href.split('#')[0] };
     Object.keys(fields).forEach(function (k) { base[k] = fields[k]; });
