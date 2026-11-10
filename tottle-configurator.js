@@ -7,8 +7,9 @@
  *   data-drawing, data-dieline (file urls), data-finishes (Soft Touch, Matte, Gloss),
  *   data-decoration (Silkscreen, Adhesive Label), data-recycled (Yes/No), data-model-fallback (second GLB URL).
  * Finish and Decoration show only what that tottle's CMS item allows; Decoration and Recycled hide when empty.
- * One Colour group (Bone, Stone, Charcoal + colour wheel) colours the whole tottle, cap included. There are no
- * overcap settings: each tottle is designed with its own cap and the model is shown as delivered. One GLB per tottle.
+ * One Colour group (Bone, Stone, Charcoal + colour wheel) colours the bottle only. The cap is never recoloured:
+ * it keeps the material in its GLB (or a fixed neutral when the file has none). No overcap settings anywhere.
+ * One GLB per tottle.
  * Leads and shares are sent through the native Webflow form [data-twc-lead],
  * so they flow into the existing Webflow → Zapier → CRM setup.
  * Requires THREE (r147) + OrbitControls + GLTFLoader, loaded by the page loader.
@@ -310,7 +311,10 @@
 
   var lin = function (hex) { return new THREE.Color(hex).convertSRGBToLinear(); };
   var bodyMat = new THREE.MeshPhysicalMaterial({ color: lin(state.body) });
-  var capMat = new THREE.MeshPhysicalMaterial({ color: lin(state.body) }); // cap takes the tottle colour
+  // The Colour choice applies to the bottle only. A cap keeps the material its GLB supplies; when the file has
+  // none (or the placeholder bottle is showing) it gets this fixed neutral.
+  var CAP_FIXED = '#232325';
+  var capMat = new THREE.MeshPhysicalMaterial({ color: lin(CAP_FIXED) });
   var ringMat = new THREE.MeshStandardMaterial({ color: 0x000000, transparent: true, opacity: 0.3 });
   var labelCanvas = document.createElement('canvas');
   var labelTex = new THREE.CanvasTexture(labelCanvas);
@@ -471,6 +475,11 @@
     if (issues.length) reportModel('CMS fields', issues, true);
   }
   var CAPS_ORDER = Object.keys(CAPS), modelVariants = [];
+  // GLTFLoader gives meshes without a material a nameless white MeshStandardMaterial; treat that as "none".
+  function hasOwnMaterial(o) {
+    var m = o.material; if (!m || Array.isArray(m)) return !!m;
+    return !!(m.name || m.map || (m.color && m.color.getHex() !== 0xffffff));
+  }
   function applyCapVariant(g) {
     g.traverse(function (o) { if (o.userData.twcVariant) o.visible = o.userData.twcVariant === state.cap; });
   }
@@ -502,7 +511,7 @@
         o.castShadow = true;
         if (n.indexOf('label') > -1) { o.material = labelMat; hasLabel = true; labelMesh = o; autoAspect = ensureLabelUV(o) || autoAspect; }
         else if (n.indexOf('cap') > -1 || n.indexOf('nozzle') > -1) {
-          o.material = capMat;
+          if (!hasOwnMaterial(o)) o.material = capMat; // otherwise the cap keeps the colour the designer gave it
           var v = capVariantOf(o);
           if (v) { (variants[v] = variants[v] || []).push(o); o.userData.twcVariant = v; }
         }
@@ -566,7 +575,7 @@
     labelMat.metalness = D.foil ? 0.6 : 0;
     labelMat.envMapIntensity = D.foil ? 0.9 : 0.35;
     bodyMat.needsUpdate = capMat.needsUpdate = labelMat.needsUpdate = true;
-    if (instant) { bodyMat.color.copy(lin(state.body)); capMat.color.copy(lin(state.body)); }
+    if (instant) bodyMat.color.copy(lin(state.body));
   }
 
   /* ---------------------------------------------------------------- artwork */
@@ -695,7 +704,6 @@
     if (exporting || !visible) return;
     resize();
     bodyMat.color.lerp(lin(state.body), 0.15);
-    capMat.color.lerp(lin(state.body), 0.15);
     if (pop > 0) { pop = Math.max(0, pop - 0.07); var k = 1 - 0.05 * Math.sin(pop * Math.PI); product.scale.set(1 / k, k, 1 / k); }
     var idle = now - lastInteract > 4000 && !reduceMotion;
     var target = idle ? Math.sin((now - t0) / 2600) * 0.4 : product.rotation.y;
@@ -709,7 +717,7 @@
   function renderSheet() {
     exporting = true;
     var keep = { pos: camera.position.clone(), rot: product.rotation.y, aspect: camera.aspect, w: canvas.clientWidth, h: canvas.clientHeight, scale: product.scale.clone(), pr: renderer.getPixelRatio() };
-    bodyMat.color.copy(lin(state.body)); capMat.color.copy(lin(state.body)); product.scale.set(1, 1, 1);
+    bodyMat.color.copy(lin(state.body)); product.scale.set(1, 1, 1);
     var TW = 800, TH = 1000, M = 60, sheet = document.createElement('canvas');
     sheet.width = TW * 3 + M * 4; sheet.height = TH + 300;
     var sc = sheet.getContext('2d');
