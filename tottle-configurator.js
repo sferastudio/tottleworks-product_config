@@ -3,9 +3,13 @@
  * Mounts into [data-configurator="mount"] on the product template.
  * Reads each tottle's data from data attributes bound to the CMS:
  *   data-name, data-shape, data-height, data-length, data-capacity,
- *   data-model (GLB url), data-label-h, data-label-w (mm),
+ *   data-model (backup GLB url), data-model-fallback (legacy), data-label-h, data-label-w (mm),
  *   data-drawing, data-dieline (file urls), data-finishes (Soft Touch, Matte, Gloss),
- *   data-decoration (Silkscreen, Adhesive Label), data-recycled (Yes/No), data-model-fallback (second GLB URL).
+ *   data-decoration (Silkscreen, Adhesive Label), data-recycled (Yes/No).
+ * The preferred model source is the CMS "3D Model File" (a .glb uploaded to Webflow, renamed .txt); its URL is the
+ * href of a hidden <a data-configurator="model-file"> next to the mount. Sources are tried in order: file → URL →
+ * legacy fallback. If none loads, the live site shows the template's "Coming soon" box; staging keeps the
+ * placeholder bottle and explains the failure in the check panel.
  * Finish and Decoration show only what that tottle's CMS item allows; Decoration and Recycled hide when empty.
  * One Colour group (Bone, Stone, Charcoal + colour wheel) colours the bottle only. The cap is never recoloured:
  * it keeps the material in its GLB (or a fixed neutral when the file has none). No overcap settings anywhere.
@@ -48,6 +52,13 @@
 
   /* ---------------------------------------------------------------- helpers */
   var d = mount.dataset;
+  // The CMS "3D Model File" is a Webflow-hosted upload (a .glb renamed .txt). Webflow can't bind a File field to an
+  // attribute, so the template carries its URL as the href of a hidden <a data-configurator="model-file">.
+  function modelFileUrl() {
+    var a = document.querySelector('a[data-configurator="model-file"]');
+    var h = a && a.getAttribute('href');
+    return h && h !== '#' && !/^\s*$/.test(h) ? a.href : '';
+  }
   var num = function (v, fb) { var n = parseFloat(String(v || '').replace(',', '.')); return isFinite(n) && n > 0 ? n : fb; };
   var slug = function (s) { return String(s || '').trim().toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, ''); };
   // Which overcap variant a mesh (or any of its ancestors) belongs to, from its name.
@@ -70,7 +81,9 @@
     shape: slug(d.shape) || 'oval',
     H: num(d.height, 100), L: num(d.length, 40),
     capacity: (d.capacity || '').trim(),
-    model: (d.model || '').trim(), modelFallback: (d.modelFallback || '').trim(),
+    // Model sources, tried in order: the CMS "3D Model File" (hosted by Webflow; its URL arrives on a hidden
+    // sibling link because File fields can't bind to attributes), then the URL fields. Empty entries are skipped.
+    modelSources: [modelFileUrl(), (d.model || '').trim(), (d.modelFallback || '').trim()].filter(function (u, i, a) { return u && a.indexOf(u) === i; }),
     labelH: num(d.labelH, 0), labelW: num(d.labelW, 0),
     drawing: (d.drawing || '').trim(), dieline: (d.dieline || '').trim()
   };
@@ -471,7 +484,7 @@
     if (!list(d.finishes).length) issues.push('Finish options are not set for this tottle; all finishes are being offered.');
     else if (list(d.finishes).length !== finishKeys.length) issues.push('Some finish options were not recognised: ' + list(d.finishes).filter(function (n) { var k = slug(n); return !(FINISHES[k] || FINISH_ALIAS[k]); }).join(', ') + '. Use Soft Touch, Matte or Gloss.');
     if (list(d.decoration).length && list(d.decoration).length !== decoKeys.length) issues.push('Some decoration methods were not recognised: ' + list(d.decoration).filter(function (n) { var k = slug(n); return !(DECORATIONS[k] || DECO_ALIAS[k]); }).join(', ') + '. Use Silkscreen or Adhesive Label.');
-    if (!T.model) issues.push('No 3D model URL on this tottle; the generic placeholder shape is showing.');
+    if (!T.modelSources.length) issues.push('No 3D Model File (or backup URL) on this tottle; the generic placeholder shape is showing here and visitors on the live site see "Coming soon".');
     if (issues.length) reportModel('CMS fields', issues, true);
   }
   var CAPS_ORDER = Object.keys(CAPS), modelVariants = [];
@@ -543,13 +556,29 @@
       if (!hasLabel && $('[data-art-head]')) $('[data-art-head]').textContent = 'Label area not set on this model';
       sizeLabel(); drawLabel(); frame(T.H * U); ready();
     }, undefined, function (err) {
-      if (T.modelFallback && url !== T.modelFallback) {
-        console.warn('[Tottle configurator] primary model failed, trying fallback', url);
-        return loadModelNow(T.modelFallback);
+      var next = T.modelSources[T.modelSources.indexOf(url) + 1];
+      if (next) {
+        console.warn('[Tottle configurator] model source failed, trying the next one', url);
+        return loadModelNow(next);
       }
-      reportModel(url, ['The model could not be loaded' + (err && err.message ? ' (' + err.message + ')' : '') + '. Check the URL opens in a browser tab, that the host allows cross-origin loading (CORS), and that the file is a .glb.'], false);
-      buildProcedural(); sizeLabel(); drawLabel(); ready();
+      var msg = 'The model could not be loaded from any source' + (err && err.message ? ' (' + err.message + ')' : '') + '. Check that the 3D Model File is uploaded (or the backup URL opens in a browser tab), that the host allows cross-origin loading (CORS), and that the file is a .glb.';
+      if (CHECK_VISIBLE) {
+        // Staging / ?twc-check: keep the viewer up with the placeholder bottle so the team sees the panel and the message.
+        reportModel(url, [msg], false);
+        buildProcedural(); sizeLabel(); drawLabel(); ready();
+      } else {
+        // Live site: never show visitors a stand-in bottle. Fall back to the page's "Coming soon" box.
+        console.error('[Tottle configurator] ' + msg);
+        comingSoon();
+      }
     });
+  }
+  // Swap the configurator for the template's "Coming soon" box (the same one shown when Configurator Enabled is off).
+  function comingSoon() {
+    var cs = document.querySelector('[data-configurator="coming-soon"]');
+    if (cs) cs.style.display = '';
+    mount.style.display = 'none';
+    mount.setAttribute('aria-hidden', 'true');
   }
 
   var HOME = new THREE.Vector3(), TARGET = new THREE.Vector3();
@@ -845,7 +874,9 @@
   applyMaterials(true);
   updateLabels();
   inspectCms();
-  if (T.model) { buildProcedural(); loadModel(T.model); } else { buildProcedural(); ready(); }
+  if (T.modelSources.length) { buildProcedural(); loadModel(T.modelSources[0]); }
+  else if (CHECK_VISIBLE) { buildProcedural(); ready(); }
+  else { comingSoon(); }
   sizeLabel(); drawLabel();
   if (document.fonts && document.fonts.ready) document.fonts.ready.then(drawLabel);
   var rt; window.addEventListener('resize', function () { clearTimeout(rt); rt = setTimeout(function () { sizeLabel(); drawLabel(); }, 120); });
