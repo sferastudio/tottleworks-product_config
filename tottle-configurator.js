@@ -208,8 +208,8 @@
         '<button class="twc-reset" type="button">Reset view</button>' +
         '<div class="twc-hint">Drag to rotate</div></div>' +
       '<div class="twc-panel">' +
-        group('Tottle color', 'body', '<div class="twc-swatches" data-g="body"></div>') +
         group('Overcap color', 'capc', '<div class="twc-swatches" data-g="capc"></div>') +
+        group('Tottle color', 'body', '<div class="twc-swatches" data-g="body"></div>') +
         group('Finish', 'finish', '<div class="twc-pills" data-g="finish"></div>') +
         (decoKeys.length ? group('Decoration', 'deco', '<div class="twc-pills" data-g="deco"></div>') : '') +
         (recycledKeys.length ? group('Resin', 'resin', '<div class="twc-pills" data-g="resin"></div>') : '') +
